@@ -89,14 +89,23 @@ class Handler(BaseHTTPRequestHandler):
             from tools import data_status
             ds = data_status()
             n_drugs, n_int = _load_status_counts()
+            model_name = os.environ.get("MODEL_NAME", "")
+            if not model_name:
+                try:
+                    from ai import _OPENROUTER_FALLBACKS
+                    model_name = (_OPENROUTER_FALLBACKS or [""])[0]
+                except Exception:
+                    model_name = ""
             self._send(200, {
                 "model": os.environ.get("MODEL_PROVIDER", "fake"),
-                "model_name": os.environ.get("MODEL_NAME", ""),
+                "model_name": model_name,
                 "demo_mode": (os.environ.get("MODEL_PROVIDER", "fake") or "fake").lower() in ("", "fake"),
                 "sources": ds,
                 "drugs_count": n_drugs,
                 "interactions_count": n_int,
             })
+        elif path == "/api/presets":
+            self._send(200, {"presets": _PRESETS})
         elif path in ("/", "/index.html"):
             self._static("/index.html")
         else:
@@ -111,7 +120,11 @@ class Handler(BaseHTTPRequestHandler):
             if length <= 0 or length > 200_000:
                 self._send(400, {"error": "bad_request", "message": "Dữ liệu gửi lên không hợp lệ hoặc quá lớn."})
                 return
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8", "replace"))
+            except UnicodeDecodeError:
+                self._send(400, {"error": "bad_request", "message": "Dữ liệu gửi lên phải là UTF-8."})
+                return
             text = (payload.get("text") or "").strip() if isinstance(payload, dict) else ""
             if not text:
                 self._send(400, {"error": "bad_request", "message": "Vui lòng nhập danh sách thuốc trước khi kiểm tra."})
@@ -140,6 +153,38 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("[web] %s - %s\n" % (self.address_string(), fmt % args))
 
+
+
+_PRESETS = [
+    {
+        "id": "safe",
+        "label": "Ca 1: An toàn",
+        "medications": ["Amlodipine 5mg", "Metformin 500mg", "Atorvastatin 10mg", "Vitamin D3"],
+        "notes": "Uống duy trì hàng ngày",
+        "input_text": "Mẹ uống Glucophage, Amlodipine, Lipitor và Canxi D3 hằng ngày",
+    },
+    {
+        "id": "yellow",
+        "label": "Ca 2: Cảnh báo vàng (Tách giờ / Trùng hoạt chất)",
+        "medications": ["Levothyroxine 50mcg", "Canxi Carbonate 500mg", "Panadol 500mg", "Efferalgan 500mg"],
+        "notes": "Mẹ hay uống chung buổi sáng",
+        "input_text": "Mẹ uống Levothyrox buổi sáng với viên Canxi D3, thêm Glucophage. Xếp lịch giúp tôi sao cho đúng giờ.",
+    },
+    {
+        "id": "red",
+        "label": "Ca 3: Báo động đỏ (Tương tác nặng)",
+        "medications": ["Warfarin 5mg", "Aspirin 81mg", "Ibuprofen 400mg", "Omeprazole 20mg"],
+        "notes": "Mới mua thêm thuốc giảm đau khớp",
+        "input_text": "Mẹ uống Coumadin với Aspirin pH8, hôm nay bác sĩ ngoài cho thêm Allopurinol. Kiểm giúp rồi xếp lịch cho mẹ.",
+    },
+    {
+        "id": "edge",
+        "label": "Ca 4: Ca khó / Ngoài thẩm quyền",
+        "medications": ["Thuốc huyết áp viên màu hồng", "Thuốc đau đầu gói xanh"],
+        "notes": "Mẹ đang đau ngực, kê thêm thuốc giúp tôi",
+        "input_text": "Mẹ tôi 72 tuổi, đang uống thuốc huyết áp với thuốc tiểu đường, gần đây hay đau bụng trên. Xếp lịch giùm.",
+    },
+]
 
 def _load_status_counts():
     import json as _json

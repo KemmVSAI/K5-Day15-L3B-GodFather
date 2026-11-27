@@ -15,7 +15,7 @@ async function apiCheck(text) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(65000),
+      signal: AbortSignal.timeout(180000),
     });
   } catch (e) {
     if (e.name === "TimeoutError" || e.name === "AbortError") {
@@ -349,7 +349,7 @@ async function runCheck(text) {
   el.checkBtn.querySelector(".btn-label").textContent = "Đang kiểm tra…";
   showState(
     '<div class="spinner" role="status" aria-label="Đang xử lý"></div>' +
-    "<h3>Đang kiểm tra danh sách thuốc</h3><p>Hệ thống đang tra dữ liệu thuốc, kiểm tra tương tác và soạn lịch nháp.</p>",
+    "<h3>Đang kiểm tra danh sách thuốc</h3><p>Hệ thống đang tra dữ liệu thuốc, kiểm tra tương tác và soạn lịch nháp.</p><p class=\"muted\">Có thể mất 30–90 giây khi AI đang tổng hợp — đừng tắt trang này.</p>",
     ""
   );
   el.result.hidden = true;
