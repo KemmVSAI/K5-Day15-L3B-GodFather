@@ -11,10 +11,10 @@
 
 | STT | Họ và tên | Mã học viên | Vai trò | Phần việc chính |
 |---|---|---|---|---|
-| 1 | Đinh Quốc Việt | 2A202603885 | Đội trưởng | ____ |
-| 2 | Lê Sỹ Long Nhật | 2A202603881 | Thành viên | ____ |
-| 3 | Vương Quang Thắng | 2A202603855 | Thành viên | ____ |
-| 4 | Nguyễn Tuấn Dũng | 2A202603859 | Thành viên | ____ |
+| 1 | Đinh Quốc Việt | 2A202603885 | Đội trưởng | Tổng hợp canvas, nộp CP, kiến trúc agent |
+| 2 | Lê Sỹ Long Nhật | 2A202603881 | Thành viên | Phỏng vấn người dùng và thu thập bằng chứng |
+| 3 | Vương Quang Thắng | 2A202603855 | Thành viên | Dữ liệu thuốc/tương tác, DATA_CARD, bộ câu thử |
+| 4 | Nguyễn Tuấn Dũng | 2A202603859 | Thành viên | Xây dựng codebase (tools.py, agent.py), chạy eval |
 
 **Quy tắc điền**
 - **Lớp:** `L3A` hoặc `L3B`. **Track:** một chữ `A` (EdTech), `B` (Y tế), `C` (Du lịch), `D` (Thương mại điện tử), `E` (Tài chính) hoặc `F` (Làn khác). **Link repo:** link GitHub công khai của nhóm.
