@@ -1,12 +1,12 @@
 ---
-name: onboarding
-description: >-
-  How to register user-facing setup steps (API keys, OAuth, connecting
-  third-party services) for the sidebar setup checklist. Use when adding a
-  feature that needs initial user configuration.
-scope: dev
+noteId: "7172b000ea7911f1a6e5177516f60786"
+tags: []
+name: "onboarding"
+description: "How to register user-facing setup steps (API keys, OAuth, connecting third-party services) for the sidebar setup checklist. Use when adding a feature that needs initial user configuration."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Onboarding Steps

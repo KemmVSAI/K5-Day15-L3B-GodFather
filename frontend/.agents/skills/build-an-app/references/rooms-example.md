@@ -1,3 +1,9 @@
+---
+noteId: "71717782ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Worked example: meeting-room booking slice
 
 Request: "Build a meeting room booking app that prevents double-bookings and

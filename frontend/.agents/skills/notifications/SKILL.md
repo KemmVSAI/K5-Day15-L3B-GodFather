@@ -1,9 +1,9 @@
 ---
-name: notifications
-description: >-
-  In-app notifications primitive with pluggable server-side channels. Use when
-  the agent needs to surface progress, alerts, or completions to the user —
-  both in-app (bell + toast) and out-of-band (webhook, Slack, custom).
+noteId: "7172d710ea7911f1a6e5177516f60786"
+tags: []
+name: "notifications"
+description: "In-app notifications primitive with pluggable server-side channels. Use when the agent needs to surface progress, alerts, or completions to the user — both in-app (bell + toast) and out-of-band (webhook, Slack, custom)."
+
 ---
 
 # Notifications

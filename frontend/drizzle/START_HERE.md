@@ -1,3 +1,9 @@
+---
+noteId: "7198d5a0ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Data layer — start here
 
 This file plus `drizzle/crud-action-example.ts` is all you need to add a table

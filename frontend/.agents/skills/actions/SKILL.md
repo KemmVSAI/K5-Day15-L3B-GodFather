@@ -1,13 +1,12 @@
 ---
-name: actions
-description: >-
-  How to create and run agent actions. Actions are the single source of truth
-  for app operations — the agent calls them as tools and frontend code calls
-  them through client hooks. Use when creating a new action, adding an API
-  integration, or wiring up frontend data fetching.
-scope: dev
+noteId: "71710250ea7911f1a6e5177516f60786"
+tags: []
+name: "actions"
+description: "How to create and run agent actions. Actions are the single source of truth for app operations — the agent calls them as tools and frontend code calls them through client hooks. Use when creating a new action, adding an API integration, or wiring up frontend data fetching."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Agent Actions

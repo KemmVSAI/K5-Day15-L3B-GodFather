@@ -1,3 +1,9 @@
+---
+noteId: "716fa2c0ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Extra Action Examples and Compatibility Patterns
 
 Read this for a second worked example beyond the one in SKILL.md, for the

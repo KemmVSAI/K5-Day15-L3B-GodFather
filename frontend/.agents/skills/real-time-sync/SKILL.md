@@ -1,11 +1,12 @@
 ---
-name: real-time-sync
-description: >-
-  Decide whether a page needs external changes before refresh, then use the
-  opt-in shared SSE and polling transport safely.
-scope: dev
+noteId: "71734c40ea7911f1a6e5177516f60786"
+tags: []
+name: "real-time-sync"
+description: "Decide whether a page needs external changes before refresh, then use the opt-in shared SSE and polling transport safely."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Real-Time Sync

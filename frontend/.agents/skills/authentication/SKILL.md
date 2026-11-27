@@ -1,13 +1,12 @@
 ---
-name: authentication
-description: >-
-  How to wire this app's login experience through the framework's
-  createAuthPlugin — branded loginHtml, public paths, and signup/logout UI.
-  Read before creating or editing server/plugins/auth.ts, or before adding
-  gated routes / a public marketing page.
-scope: dev
+noteId: "71719e91ea7911f1a6e5177516f60786"
+tags: []
+name: "authentication"
+description: "How to wire this app's login experience through the framework's createAuthPlugin — branded loginHtml, public paths, and signup/logout UI. Read before creating or editing server/plugins/auth.ts, or before adding gated routes / a public marketing page."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Authentication

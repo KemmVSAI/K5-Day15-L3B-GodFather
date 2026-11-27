@@ -1,10 +1,10 @@
 ---
-name: secrets
-description: >-
-  Connect external services and keep app credentials scoped. Use before adding
-  an API key, OAuth connection, provider setup, or server-side request that
-  needs a user's or workspace's credential.
-scope: dev
+noteId: "7172fe21ea7911f1a6e5177516f60786"
+tags: []
+name: "secrets"
+description: "Connect external services and keep app credentials scoped. Use before adding an API key, OAuth connection, provider setup, or server-side request that needs a user's or workspace's credential."
+scope: "dev"
+
 ---
 
 # Secrets

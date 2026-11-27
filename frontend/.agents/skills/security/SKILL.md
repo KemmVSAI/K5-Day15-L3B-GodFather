@@ -1,10 +1,10 @@
 ---
-name: security
-description: >-
-  Secure app data, actions, routes, and external input. Use when changing
-  authentication, authorization, database access, uploads, untrusted content,
-  or server-side requests to user-provided URLs.
-scope: dev
+noteId: "71734c41ea7911f1a6e5177516f60786"
+tags: []
+name: "security"
+description: "Secure app data, actions, routes, and external input. Use when changing authentication, authorization, database access, uploads, untrusted content, or server-side requests to user-provided URLs."
+scope: "dev"
+
 ---
 
 # Security

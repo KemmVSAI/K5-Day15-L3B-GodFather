@@ -1,3 +1,9 @@
+---
+noteId: "71740f91ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Project decisions
 
 <!-- Written by Builder.io from the answers given before the first build. Question catalog 2026-09-30.1. -->

@@ -1,3 +1,9 @@
+---
+noteId: "717261e2ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Visual Direction Reference
 
 Use this reference when a new app or workspace needs a visual point of view and

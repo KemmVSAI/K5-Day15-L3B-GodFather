@@ -1,13 +1,12 @@
 ---
-name: agent-native-docs
-description: >-
-  How to find version-matched Agent-Native framework docs and source bundled in
-  node_modules. Use before implementing or answering questions about
-  @agent-native/core APIs, generated apps, workspaces, templates, or advanced
-  features.
-scope: dev
+noteId: "71712960ea7911f1a6e5177516f60786"
+tags: []
+name: "agent-native-docs"
+description: "How to find version-matched Agent-Native framework docs and source bundled in node_modules. Use before implementing or answering questions about @agent-native/core APIs, generated apps, workspaces, templates, or advanced features."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Agent-Native Docs Lookup

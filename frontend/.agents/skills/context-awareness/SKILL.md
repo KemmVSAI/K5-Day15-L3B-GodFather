@@ -1,12 +1,12 @@
 ---
-name: context-awareness
-description: >-
-  How the agent knows what the user is looking at. Use when exposing UI state to
-  the agent, implementing view-screen or navigate actions, wiring navigation
-  state, or debugging agent context issues.
-scope: dev
+noteId: "717261e0ea7911f1a6e5177516f60786"
+tags: []
+name: "context-awareness"
+description: "How the agent knows what the user is looking at. Use when exposing UI state to the agent, implementing view-screen or navigate actions, wiring navigation state, or debugging agent context issues."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Context Awareness

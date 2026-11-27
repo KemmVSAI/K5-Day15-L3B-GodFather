@@ -1,15 +1,12 @@
 ---
-name: multi-app-workspace
-description: >-
-  How to build or extend a multi-app Agent-Native workspace — the monorepo
-  shape, the Dispatch control plane, the shell app that fronts every other app,
-  and the shared package. Use when the user asks for a workspace, a platform, a
-  suite of apps, an app launcher or shell, a second app, Dispatch, a shared
-  vault, or cross-app agents. This repo is a standalone app, so read this
-  before restructuring it.
-scope: dev
+noteId: "717288f1ea7911f1a6e5177516f60786"
+tags: []
+name: "multi-app-workspace"
+description: "How to build or extend a multi-app Agent-Native workspace — the monorepo shape, the Dispatch control plane, the shell app that fronts every other app, and the shared package. Use when the user asks for a workspace, a platform, a suite of apps, an app launcher or shell, a second app, Dispatch, a shared vault, or cross-app agents. This repo is a standalone app, so read this before restructuring it."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Multi-App Workspaces

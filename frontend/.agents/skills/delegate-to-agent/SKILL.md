@@ -1,9 +1,10 @@
 ---
-name: delegate-to-agent
-description: >-
-  Route user-facing AI work through the app's agent chat. Use when adding an
-  AI-powered button, workflow, research task, generation flow, or follow-up.
-scope: dev
+noteId: "71723ad0ea7911f1a6e5177516f60786"
+tags: []
+name: "delegate-to-agent"
+description: "Route user-facing AI work through the app's agent chat. Use when adding an AI-powered button, workflow, research task, generation flow, or follow-up."
+scope: "dev"
+
 ---
 
 # Delegate AI Work to Agent Chat

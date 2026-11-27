@@ -1,3 +1,9 @@
+---
+noteId: "71715070ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Data and access decisions
 
 Use this when choosing who may see a row or when adding a schema/migration. A

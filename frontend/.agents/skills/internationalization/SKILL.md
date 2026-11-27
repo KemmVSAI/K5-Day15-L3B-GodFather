@@ -1,12 +1,12 @@
 ---
-name: internationalization
-description: >-
-  How to add localized UI copy when the user explicitly requests i18n.
-  Do not load or apply this skill for ordinary English UI edits in this
-  starter — it ships inline English strings with no catalogs.
-scope: dev
+noteId: "717261e3ea7911f1a6e5177516f60786"
+tags: []
+name: "internationalization"
+description: "How to add localized UI copy when the user explicitly requests i18n. Do not load or apply this skill for ordinary English UI edits in this starter — it ships inline English strings with no catalogs."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Internationalization

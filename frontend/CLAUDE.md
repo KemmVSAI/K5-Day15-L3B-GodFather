@@ -1,3 +1,9 @@
+---
+noteId: "7173e880ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # App — Agent Guide
 
 The agent guide for this app lives in [AGENTS.md](AGENTS.md) — the single source

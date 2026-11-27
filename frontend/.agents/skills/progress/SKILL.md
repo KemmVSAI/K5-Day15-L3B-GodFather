@@ -1,9 +1,9 @@
 ---
-name: progress
-description: >-
-  Report live progress from long-running agent tasks. Use when a task takes
-  more than a few seconds, so the user can watch status in the runs tray
-  instead of staring at a spinner.
+noteId: "7172d712ea7911f1a6e5177516f60786"
+tags: []
+name: "progress"
+description: "Report live progress from long-running agent tasks. Use when a task takes more than a few seconds, so the user can watch status in the runs tray instead of staring at a spinner."
+
 ---
 
 # Progress

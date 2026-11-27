@@ -1,3 +1,9 @@
+---
+noteId: "7174abd0ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # app — Development Guide
 
 This guide is for development-mode agents editing this app's source code. For app operations and tools, see AGENTS.md.

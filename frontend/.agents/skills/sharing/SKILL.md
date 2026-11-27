@@ -1,13 +1,12 @@
 ---
-name: sharing
-description: >-
-  Framework-level sharing and privacy for user-authored resources
-  (dashboards, documents, forms, decks, etc.). Use when making a resource
-  table ownable, wiring list/read/update access checks, or dropping the
-  standard share dialog into a template.
-scope: dev
+noteId: "71734c42ea7911f1a6e5177516f60786"
+tags: []
+name: "sharing"
+description: "Framework-level sharing and privacy for user-authored resources (dashboards, documents, forms, decks, etc.). Use when making a resource table ownable, wiring list/read/update access checks, or dropping the standard share dialog into a template."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Sharing — Private by Default, Explicit Share

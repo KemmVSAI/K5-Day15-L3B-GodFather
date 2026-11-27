@@ -1,9 +1,9 @@
 ---
-name: inline-embeds
-description: >-
-  How to render interactive previews of app screens inline in agent chat via
-  sandboxed iframes. Covers the `embed` fence syntax, the `postNavigate` pop-out
-  helper, and when to prefer an embed over prose / a static image.
+noteId: "717261e1ea7911f1a6e5177516f60786"
+tags: []
+name: "inline-embeds"
+description: "How to render interactive previews of app screens inline in agent chat via sandboxed iframes. Covers the `embed` fence syntax, the `postNavigate` pop-out helper, and when to prefer an embed over prose / a static image."
+
 ---
 
 # Inline Embeds

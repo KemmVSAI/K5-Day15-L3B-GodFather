@@ -1,13 +1,12 @@
 ---
-name: real-time-collab
-description: >-
-  Multi-user collaborative editing with Yjs CRDT, SSE fast-path transport, and
-  granular server-side merge. Use when adding real-time collaborative editing to
-  a template, debugging sync issues, or understanding how the agent and humans
-  edit documents simultaneously.
-scope: dev
+noteId: "7172b001ea7911f1a6e5177516f60786"
+tags: []
+name: "real-time-collab"
+description: "Multi-user collaborative editing with Yjs CRDT, SSE fast-path transport, and granular server-side merge. Use when adding real-time collaborative editing to a template, debugging sync issues, or understanding how the agent and humans edit documents simultaneously."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Real-Time Collaboration

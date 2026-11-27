@@ -1,10 +1,10 @@
 ---
-name: shadcn-ui
-description: >-
-  Using the app's local UI adapter and Toolkit or shadcn primitives. Use when
-  choosing or composing standard controls, implementing dialogs, menus, or
-  forms, or changing component variants and theme tokens.
-scope: dev
+noteId: "7172fe20ea7911f1a6e5177516f60786"
+tags: []
+name: "shadcn-ui"
+description: "Using the app's local UI adapter and Toolkit or shadcn primitives. Use when choosing or composing standard controls, implementing dialogs, menus, or forms, or changing component variants and theme tokens."
+scope: "dev"
+
 ---
 
 # shadcn/ui and Local UI Adapters

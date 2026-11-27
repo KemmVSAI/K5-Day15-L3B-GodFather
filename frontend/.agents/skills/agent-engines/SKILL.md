@@ -1,9 +1,9 @@
 ---
-name: agent-engines
-description: >-
-  How to inspect and configure the AI engine (model provider) powering the
-  agent. Use when the user asks to switch models, check which engine is active,
-  test a new provider, or register a custom engine.
+noteId: "7170db40ea7911f1a6e5177516f60786"
+tags: []
+name: "agent-engines"
+description: "How to inspect and configure the AI engine (model provider) powering the agent. Use when the user asks to switch models, check which engine is active, test a new provider, or register a custom engine."
+
 ---
 
 # Agent Engines

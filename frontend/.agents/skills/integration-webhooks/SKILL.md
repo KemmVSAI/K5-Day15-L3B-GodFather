@@ -1,13 +1,12 @@
 ---
-name: integration-webhooks
-description: >-
-  Cross-platform pattern for handling messaging integration webhooks (Slack,
-  Telegram, WhatsApp, email, etc.) on serverless hosts. Use when adding a new
-  integration adapter, debugging dropped messages, or wiring long-running agent
-  work into a webhook handler.
-scope: dev
+noteId: "717288f0ea7911f1a6e5177516f60786"
+tags: []
+name: "integration-webhooks"
+description: "Cross-platform pattern for handling messaging integration webhooks (Slack, Telegram, WhatsApp, email, etc.) on serverless hosts. Use when adding a new integration adapter, debugging dropped messages, or wiring long-running agent work into a webhook handler."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Integration Webhooks

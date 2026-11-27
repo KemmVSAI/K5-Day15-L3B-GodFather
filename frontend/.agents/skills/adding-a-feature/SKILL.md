@@ -1,11 +1,12 @@
 ---
-name: adding-a-feature
-description: >-
-  The four-area checklist every new feature must complete. Use when adding any
-  feature, integration, or capability to ensure the agent and UI stay in parity.
-scope: dev
+noteId: "7170b430ea7911f1a6e5177516f60786"
+tags: []
+name: "adding-a-feature"
+description: "The four-area checklist every new feature must complete. Use when adding any feature, integration, or capability to ensure the agent and UI stay in parity."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Adding a Feature — The Four-Area Checklist

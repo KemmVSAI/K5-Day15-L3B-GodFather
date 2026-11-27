@@ -1,11 +1,10 @@
 ---
-name: reliable-mutations
-description: >-
-  How the agent must perform writes so they actually persist under the hosted
-  foreground run budget and long-running background handoffs. Use whenever you
-  create, update, delete, or batch-write app data — especially "do this for many
-  items" loops, or any task where the user expects N things to end up saved.
-scope: dev
+noteId: "7172d713ea7911f1a6e5177516f60786"
+tags: []
+name: "reliable-mutations"
+description: "How the agent must perform writes so they actually persist under the hosted foreground run budget and long-running background handoffs. Use whenever you create, update, delete, or batch-write app data — especially \"do this for many items\" loops, or any task where the user expects N things to end up saved."
+scope: "dev"
+
 ---
 
 # Reliable Mutations

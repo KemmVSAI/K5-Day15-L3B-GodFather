@@ -1,3 +1,9 @@
+---
+noteId: "71715071ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Default scaffold edit points
 
 Use only when `package.json["agent-native"].scaffold.template` is `default`.

@@ -1,12 +1,12 @@
 ---
-name: client-side-routing
-description: >-
-  How to add routes without remounting the app shell. Use when adding a new
-  route, fixing agent sidebar reloads on navigation, or choosing between
-  `root.tsx` layout and pathless `_app.tsx` layout patterns.
-scope: dev
+noteId: "71719e90ea7911f1a6e5177516f60786"
+tags: []
+name: "client-side-routing"
+description: "How to add routes without remounting the app shell. Use when adding a new route, fixing agent sidebar reloads on navigation, or choosing between `root.tsx` layout and pathless `_app.tsx` layout patterns."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Client-Side Routing

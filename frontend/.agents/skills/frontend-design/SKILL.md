@@ -1,10 +1,10 @@
 ---
-name: frontend-design
-description: >-
-  Product-specific interface design for an Agent-Native app. Use when creating
-  or changing any user-facing UI, including screenshot feedback, copy or
-  density cleanup, settings, controls, or a visual redesign.
-scope: both
+noteId: "71723ad1ea7911f1a6e5177516f60786"
+tags: []
+name: "frontend-design"
+description: "Product-specific interface design for an Agent-Native app. Use when creating or changing any user-facing UI, including screenshot feedback, copy or density cleanup, settings, controls, or a visual redesign."
+scope: "both"
+
 ---
 
 # Frontend Design

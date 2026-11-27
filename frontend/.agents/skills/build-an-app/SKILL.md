@@ -1,13 +1,12 @@
 ---
-name: build-an-app
-description: >-
-  Fast end-to-end workflow for turning this starter into a working domain app
-  from a short or vague request. Use when asked to build, make, create, or
-  prototype an app, tool, tracker, dashboard, booking, inventory, or CRM
-  system with Agent-Native. Read before the first edit.
-scope: both
+noteId: "71717780ea7911f1a6e5177516f60786"
+tags: []
+name: "build-an-app"
+description: "Fast end-to-end workflow for turning this starter into a working domain app from a short or vague request. Use when asked to build, make, create, or prototype an app, tool, tracker, dashboard, booking, inventory, or CRM system with Agent-Native. Read before the first edit."
+scope: "both"
 metadata:
   internal: true
+
 ---
 
 # Build an App

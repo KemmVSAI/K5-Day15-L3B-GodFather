@@ -1,12 +1,12 @@
 ---
-name: customizing-agent-native
-description: >-
-  How to configure, compose, or eject Agent-Native features into app-owned
-  code. Use when overriding shared components or integrations, customizing a
-  template, adding UI to chat or headless apps, or inspecting package source.
-scope: dev
+noteId: "7171c5a0ea7911f1a6e5177516f60786"
+tags: []
+name: "customizing-agent-native"
+description: "How to configure, compose, or eject Agent-Native features into app-owned code. Use when overriding shared components or integrations, customizing a template, adding UI to chat or headless apps, or inspecting package source."
+scope: "dev"
 metadata:
   internal: true
+
 ---
 
 # Customizing Agent-Native

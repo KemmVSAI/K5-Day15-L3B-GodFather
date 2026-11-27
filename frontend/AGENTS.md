@@ -1,3 +1,9 @@
+---
+noteId: "71740f90ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # App — Agent Guide
 
 This starter ships as a blank Agent-Native app canvas — that describes its

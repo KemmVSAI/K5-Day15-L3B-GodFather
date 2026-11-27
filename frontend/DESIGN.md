@@ -1,3 +1,9 @@
+---
+noteId: "71740f92ea7911f1a6e5177516f60786"
+tags: []
+
+---
+
 # Visual Design Contract
 
 `AGENTS.md` is the canonical statement of the blank-canvas rule — check
