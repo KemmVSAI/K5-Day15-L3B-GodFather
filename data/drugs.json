@@ -1,0 +1,222 @@
+{
+  "schema_version": "1.0",
+  "description": "Danh mục 18 thuốc phổ biến cho người cao tuổi mắc bệnh mạn tính (dữ liệu mẫu tổng hợp cho bản chạy thử Track B2, không phải dữ liệu bệnh nhân thật).",
+  "drugs": [
+    {
+      "code": "DRUG-01",
+      "generic_name": "Metformin",
+      "aliases": ["Glucophage", "Siofor", "Metformin Stella", "Metformin"],
+      "drug_class": "Thuốc trị đái tháo đường (Biguanide)",
+      "recommended_slots": ["sang", "toi"],
+      "meal_relation": "sau_an",
+      "timing_note": "Uống ngay trong hoặc ngay sau bữa ăn để giảm kích ứng dạ dày.",
+      "warnings": [
+        "Không tự ý ngừng thuốc; báo bác sĩ/dược sĩ nếu buồn nôn, tiêu chảy kéo dài hoặc trước khi chụp chiếu có thuốc cản quang."
+      ]
+    },
+    {
+      "code": "DRUG-02",
+      "generic_name": "Glimepiride",
+      "aliases": ["Amaryl", "Glimepiride"],
+      "drug_class": "Thuốc trị đái tháo đường (Sulfonylurea)",
+      "recommended_slots": ["sang"],
+      "meal_relation": "truoc_an",
+      "timing_note": "Uống ngay trước hoặc cùng bữa ăn sáng chính; không uống nếu bỏ bữa.",
+      "warnings": [
+        "Có nguy cơ hạ đường huyết nếu uống mà không ăn đủ bữa."
+      ]
+    },
+    {
+      "code": "DRUG-03",
+      "generic_name": "Amlodipine",
+      "aliases": ["Amlor", "Amlodipin", "Amlodipine"],
+      "drug_class": "Thuốc hạ huyết áp (Chẹn kênh canxi)",
+      "recommended_slots": ["sang"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Uống cố định một giờ mỗi ngày (thường buổi sáng), trước hoặc sau ăn đều được.",
+      "warnings": [
+        "Không tự ý ngừng đột ngột; theo dõi huyết áp và dấu hiệu phù cổ chân."
+      ]
+    },
+    {
+      "code": "DRUG-04",
+      "generic_name": "Perindopril",
+      "aliases": ["Coversyl", "Perindopril"],
+      "drug_class": "Thuốc hạ huyết áp / tim mạch (Ức chế men chuyển - ACEi)",
+      "recommended_slots": ["sang"],
+      "meal_relation": "truoc_an",
+      "timing_note": "Thường uống 1 lần vào buổi sáng trước khi ăn.",
+      "warnings": [
+        "Theo dõi ho khan kéo dài hoặc chóng mặt khi đứng lên."
+      ]
+    },
+    {
+      "code": "DRUG-05",
+      "generic_name": "Losartan",
+      "aliases": ["Cozaar", "Losartan"],
+      "drug_class": "Thuốc hạ huyết áp / tim mạch (Chẹn thụ thể ARB)",
+      "recommended_slots": ["sang"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Uống cố định một giờ mỗi ngày (thường buổi sáng), có thể uống cùng hoặc không cùng thức ăn.",
+      "warnings": [
+        "Theo dõi huyết áp định kỳ; không tự ý bổ sung kali khi chưa hỏi bác sĩ."
+      ]
+    },
+    {
+      "code": "DRUG-06",
+      "generic_name": "Bisoprolol",
+      "aliases": ["Concor", "Bisoprolol"],
+      "drug_class": "Thuốc tim mạch / huyết áp (Chẹn beta)",
+      "recommended_slots": ["sang"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Uống vào buổi sáng, trước hoặc sau ăn sáng đều được.",
+      "warnings": [
+        "Tuyệt đối không ngừng thuốc đột ngột nếu chưa có chỉ định bác sĩ."
+      ]
+    },
+    {
+      "code": "DRUG-07",
+      "generic_name": "Spironolactone",
+      "aliases": ["Aldactone", "Spironolactone"],
+      "drug_class": "Thuốc lợi tiểu giữ kali",
+      "recommended_slots": ["sang"],
+      "meal_relation": "sau_an",
+      "timing_note": "Uống vào buổi sáng (hoặc đầu giờ chiều nếu uống 2 lần) sau ăn để tránh tiểu đêm mất ngủ.",
+      "warnings": [
+        "Nguy cơ tăng kali máu nếu dùng chung thuốc huyết áp nhóm ACEi/ARB hoặc viên bổ sung kali."
+      ]
+    },
+    {
+      "code": "DRUG-08",
+      "generic_name": "Furosemide",
+      "aliases": ["Lasix", "Furosemid", "Furosemide"],
+      "drug_class": "Thuốc lợi tiểu quai",
+      "recommended_slots": ["sang"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Uống vào buổi sáng (trước 15h chiều) để tránh tiểu đêm.",
+      "warnings": [
+        "Theo dõi chuột rút, mệt mỏi hoặc chóng mặt do mất nước/điện giải."
+      ]
+    },
+    {
+      "code": "DRUG-09",
+      "generic_name": "Atorvastatin",
+      "aliases": ["Lipitor", "Atorvastatin"],
+      "drug_class": "Thuốc hạ mỡ máu (Statin)",
+      "recommended_slots": ["toi"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Có thể uống bất kỳ lúc nào cố định trong ngày, thường xếp buổi tối để dễ nhớ cùng các thuốc tối.",
+      "warnings": [
+        "Báo bác sĩ/dược sĩ nếu có đau cơ bất thường không rõ nguyên nhân."
+      ]
+    },
+    {
+      "code": "DRUG-10",
+      "generic_name": "Simvastatin",
+      "aliases": ["Zocor", "Simvastatin"],
+      "drug_class": "Thuốc hạ mỡ máu (Statin)",
+      "recommended_slots": ["toi"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Nên uống vào buổi tối để đạt hiệu quả kiểm soát mỡ máu tốt nhất.",
+      "warnings": [
+        "Tránh uống cùng nước bưởi chùm; cần kiểm tra tương tác với một số thuốc tim mạch."
+      ]
+    },
+    {
+      "code": "DRUG-11",
+      "generic_name": "Aspirin",
+      "aliases": ["Aspirin 81mg", "Aspirin pH8", "Aspirin"],
+      "drug_class": "Thuốc chống kết tập tiểu cầu",
+      "recommended_slots": ["sang"],
+      "meal_relation": "sau_an",
+      "timing_note": "Uống sau bữa ăn sáng với nhiều nước để giảm kích ứng dạ dày.",
+      "warnings": [
+        "Theo dõi dấu hiệu bầm tím bất thường, chảy máu chân răng hoặc phân đen."
+      ]
+    },
+    {
+      "code": "DRUG-12",
+      "generic_name": "Clopidogrel",
+      "aliases": ["Plavix", "Clopidogrel"],
+      "drug_class": "Thuốc chống kết tập tiểu cầu",
+      "recommended_slots": ["sang"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Uống 1 lần/ngày vào giờ cố định (thường buổi sáng).",
+      "warnings": [
+        "Không tự ý ngừng thuốc; cần kiểm tra kỹ nếu đang uống kèm thuốc dạ dày nhóm PPI."
+      ]
+    },
+    {
+      "code": "DRUG-13",
+      "generic_name": "Warfarin",
+      "aliases": ["Coumadin", "Warfarin"],
+      "drug_class": "Thuốc chống đông máu",
+      "recommended_slots": ["toi"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Uống đúng 1 giờ cố định mỗi ngày (thường vào buổi chiều tối).",
+      "warnings": [
+        "Khoảng an toàn hẹp (cần xét nghiệm INR định kỳ); rất nhạy với thuốc giảm đau và thực phẩm giàu vitamin K."
+      ]
+    },
+    {
+      "code": "DRUG-14",
+      "generic_name": "Omeprazole",
+      "aliases": ["Losec", "Omeprazol", "Omeprazole"],
+      "drug_class": "Thuốc giảm tiết axit dạ dày (PPI)",
+      "recommended_slots": ["sang"],
+      "meal_relation": "truoc_an",
+      "timing_note": "Uống trước bữa ăn sáng 30 phút (nuốt nguyên viên, không nhai/nghiền).",
+      "warnings": [
+        "Không nên dùng chung với một số thuốc chống kết tập tiểu cầu hoặc cần tách giờ với thuốc tuyến giáp."
+      ]
+    },
+    {
+      "code": "DRUG-15",
+      "generic_name": "Levothyroxine",
+      "aliases": ["Levothyrox", "Berlthyrox", "Euthyrox", "Levothyroxine"],
+      "drug_class": "Hormone tuyến giáp",
+      "recommended_slots": ["sang"],
+      "meal_relation": "truoc_an",
+      "timing_note": "Uống lúc đói vào sáng sớm, trước ăn sáng 30–60 phút với nước lọc; cách các thuốc chứa canxi/sắt/dạ dày ít nhất 4 giờ.",
+      "warnings": [
+        "Hấp thu rất dễ bị giảm nếu uống cùng đồ ăn, sữa, cà phê hoặc viên canxi/sắt."
+      ]
+    },
+    {
+      "code": "DRUG-16",
+      "generic_name": "Calcium + Vitamin D3",
+      "aliases": ["Canxi D3", "Calci D", "Calcium D3", "Canxi", "Calcium"],
+      "drug_class": "Khoáng chất / bổ sung xương khớp",
+      "recommended_slots": ["trua"],
+      "meal_relation": "sau_an",
+      "timing_note": "Uống sau bữa ăn trưa (hoặc sáng nếu không dùng thuốc tuyến giáp) để hấp thu tốt và tránh sỏi thận về đêm.",
+      "warnings": [
+        "Cần tách giờ ít nhất 4 giờ nếu người bệnh có dùng Levothyroxine."
+      ]
+    },
+    {
+      "code": "DRUG-17",
+      "generic_name": "Ibuprofen",
+      "aliases": ["Brufen", "Advil", "Ibuprofen"],
+      "drug_class": "Thuốc giảm đau, kháng viêm không steroid (NSAID)",
+      "recommended_slots": ["trua", "toi"],
+      "meal_relation": "sau_an",
+      "timing_note": "Chỉ dùng khi cần theo hướng dẫn, luôn uống ngay sau ăn no.",
+      "warnings": [
+        "Thận trọng cao ở người cao tuổi vì nguy cơ loét dạ dày, tăng huyết áp và suy thận."
+      ]
+    },
+    {
+      "code": "DRUG-18",
+      "generic_name": "Paracetamol",
+      "aliases": ["Panadol", "Efferalgan", "Hapacol", "Tylenol", "Paracetamol"],
+      "drug_class": "Thuốc giảm đau, hạ sốt",
+      "recommended_slots": ["sang", "trua", "toi"],
+      "meal_relation": "bat_ky",
+      "timing_note": "Uống khi cần giảm đau/sốt, mỗi lần cách nhau ít nhất 4–6 giờ.",
+      "warnings": [
+        "Kiểm tra kỹ thành phần các thuốc cảm/giảm đau khác để tránh trùng hoạt chất Paracetamol gây hại gan."
+      ]
+    }
+  ]
+}
