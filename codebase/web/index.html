@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thuốc Nhà — Kiểm tra tương tác thuốc &amp; lịch uống cho người thân</title>
+  <meta name="description" content="Trợ lý giúp người con sắp thuốc cho cha mẹ cao tuổi: kiểm tra tương tác thuốc và soạn lịch uống nháp.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e7a5f'/%3E%3Cpath d='M32 14v36M14 32h36' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- ================= HEADER ================= -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="40" height="40" role="img" aria-label="Logo Thuốc Nhà">
+            <rect width="64" height="64" rx="14" fill="#0e7a5f"/>
+            <path d="M32 14v36M14 32h36" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <h1>Thuốc Nhà</h1>
+          <p>Trợ lý giúp bạn kiểm tra tương tác &amp; sắp thuốc cho cha mẹ dễ dàng hơn.</p>
+        </div>
+      </div>
+      <span id="model-badge" class="badge badge-neutral" hidden></span>
+    </div>
+  </header>
+
+  <!-- ================= MEDICAL DISCLAIMER ================= -->
+  <div class="disclaimer-bar" role="note">
+    <div class="container">
+      <strong>⚠️ Lưu ý y tế:</strong> Kết quả chỉ mang tính tham khảo hỗ trợ sắp xếp lịch uống,
+      <strong>không thay thế chỉ định của bác sĩ hoặc dược sĩ.</strong>
+    </div>
+  </div>
+
+  <main class="container">
+    <!-- ================= STEP 1: NHẬP THUỐC ================= -->
+    <section class="panel" id="input-section" aria-labelledby="input-heading">
+      <div class="panel-head">
+        <h2 id="input-heading">1. Danh sách thuốc mẹ đang uống</h2>
+        <p class="panel-sub">Gõ tên thuốc theo vỏ hộp hoặc đơn thuốc (ví dụ: <em>Glucophage, Amlodipine, Lipitor, Canxi D3</em>). Chưa cần đúng chính tả — hệ thống sẽ hỏi lại nếu chưa rõ.</p>
+      </div>
+
+      <div class="demo-row" role="group" aria-label="Ca mẫu để thử nhanh">
+        <span class="demo-label">Thử nhanh ca mẫu:</span>
+        <button type="button" class="chip" data-preset="safe">🟢 Ca 1 · An toàn</button>
+        <button type="button" class="chip" data-preset="yellow">🟡 Ca 2 · Cần tách giờ</button>
+        <button type="button" class="chip" data-preset="red">🔴 Ca 3 · Báo động đỏ</button>
+        <button type="button" class="chip" data-preset="hard">⚪ Ca 4 · Ca khó</button>
+      </div>
+
+      <form id="drug-form" novalidate>
+        <div class="field">
+          <label for="drug-input">Tên các loại thuốc</label>
+          <textarea id="drug-input" name="text" rows="4" required
+            placeholder="Mẹ uống Glucophage, Amlodipine, Lipitor và Canxi D3 hằng ngày&#10;Bạn có thể thêm ghi chú: khi đau khớp mẹ thêm Brufen…"></textarea>
+          <p class="field-hint" id="drug-input-hint">Mỗi loại cách nhau bằng dấu phẩy hoặc xuống dòng. Không cần nhập liều lượng — trợ lý không tư vấn liều.</p>
+          <p class="field-error" id="drug-input-error" hidden></p>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="check-btn" class="btn btn-primary btn-lg">
+            <span class="btn-label">Kiểm tra tương tác thuốc</span>
+          </button>
+          <button type="button" id="clear-btn" class="btn btn-ghost">Xoá tất cả</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ================= STEP 2: KẾT QUẢ ================= -->
+    <section id="result-section" hidden aria-live="polite">
+      <!-- Risk summary -->
+      <div class="panel" id="risk-summary-panel">
+        <div class="panel-head">
+          <h2>2. Kết quả kiểm tra</h2>
+        </div>
+        <div id="risk-summary" class="risk-summary"></div>
+      </div>
+
+      <!-- Interaction cards -->
+      <div class="panel" id="interactions-panel" hidden>
+        <div class="panel-head">
+          <h2>3. Cảnh báo tương tác</h2>
+          <p class="panel-sub">Bấm vào từng cảnh báo để xem chi tiết và khuyến nghị.</p>
+        </div>
+        <div id="interaction-list" class="interaction-list"></div>
+      </div>
+
+      <!-- Schedule -->
+      <div class="panel" id="schedule-panel" hidden>
+        <div class="panel-head">
+          <h2>4. Lịch uống nháp</h2>
+          <p class="panel-sub" id="schedule-sub">Đây là <strong>lịch NHÁP</strong> — bạn đối chiếu đơn bác sĩ và xác nhận trước khi cho mẹ dùng.</p>
+        </div>
+        <div id="schedule-content"></div>
+      </div>
+
+      <!-- Next steps / handoff -->
+      <div class="panel" id="next-step-panel" hidden>
+        <div class="panel-head">
+          <h2>5. Bước tiếp theo</h2>
+        </div>
+        <div id="next-step-content"></div>
+      </div>
+
+      <!-- Detail text (AI output) -->
+      <div class="panel" id="detail-panel" hidden>
+        <div class="panel-head">
+          <h2>Chi tiết kết quả từ trợ lý</h2>
+          <details class="details-collapse">
+            <summary>Xem / ẩn bản phân tích đầy đủ</summary>
+            <div id="ai-output" class="ai-output"></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= EMPTY / LOADING / ERROR STATES ================= -->
+    <section id="state-section" aria-live="polite"></section>
+  </main>
+
+  <!-- ================= HỎI DƯỢC SĨ DIALOG ================= -->
+  <dialog id="pharmacist-dialog" class="dialog">
+    <div class="dialog-head">
+      <h3>Phiếu chuẩn bị hỏi dược sĩ</h3>
+      <button type="button" class="dialog-close" id="dialog-close" aria-label="Đóng">×</button>
+    </div>
+    <p class="dialog-note">Hệ thống <strong>chưa tự gửi</strong> phiếu này đi đâu — bạn mang theo hoặc đọc cho dược sĩ tại nhà thuốc / phòng khám. Thông tin chỉ nằm trên máy của bạn.</p>
+    <pre id="pharmacist-note" class="pharmacist-note" tabindex="0"></pre>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-primary" id="copy-note-btn">Copy phiếu</button>
+      <button type="button" class="btn btn-ghost" id="dialog-close-2">Đóng</button>
+    </div>
+  </dialog>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="site-footer">
+    <div class="container">
+      <p><strong>Thuốc Nhà</strong> — bài chạy thử Track B2 (Kiểm tra tương tác thuốc &amp; lịch uống) · Nhóm GodFather · Hackathon AI20K K5 · L3B.</p>
+      <p class="footer-muted">Dữ liệu demo: 18 hoạt chất bệnh mạn tính phổ biến + 12 cặp tương tác đã đối chiếu Dược thư Quốc gia VN &amp; DDInter. Thuốc ngoài danh sách sẽ được báo rõ "chưa có trong dữ liệu".</p>
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

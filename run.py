@@ -46,8 +46,10 @@ HELP = """Các lệnh dùng được:
   python run.py score eval/run-1.csv    tính % đạt sau khi điền cột pass
   python run.py simulate --try [N]      thử mô phỏng chi phí N phiên (mặc định 10)
   python run.py simulate                mô phỏng chi phí khi dùng thật → cost/simulate-N.csv
+  python run.py web                     mở giao diện web bản chạy thử (http://127.0.0.1:8000)
   (thêm --wait 4 sau eval / simulate để nghỉ 4 giây giữa hai lượt gọi)
   python run.py simulate --rate-from eval/run-2.csv   lấy tỉ lệ đạt từ đúng lượt 2
+  python run.py web                    mở giao diện web (trình duyệt: http://127.0.0.1:8000)
 (macOS/Linux có thể phải gõ python3; Windows có thể gõ py)"""
 
 
@@ -104,6 +106,8 @@ def main(argv):
         return py(EVAL, "--score", path)
     if cmd == "simulate":
         return py(SIMULATE, *rest)
+    if cmd == "web":
+        return py(os.path.join("codebase", "web.py"), *rest)
     if cmd in ("bench", "bench-fake"):
         print("Lệnh %s đã đổi tên: dùng `python run.py eval` (thử: `eval --try`, không gọi agent: `eval --fake`)." % cmd)
         return 2

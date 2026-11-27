@@ -285,7 +285,8 @@ def answer(text: str) -> dict:
     if not raw:
         note("dừng: đầu vào rỗng (G10)")
         return {
-            "output": "Bạn vui lòng nhập tên các loại thuốc mẹ đang uống (theo tên trên vỏ hộp hoặc đơn thuốc) để tôi kiểm tra tương tác và soạn lịch uống nháp."
+            "output": "Bạn vui lòng nhập tên các loại thuốc mẹ đang uống (theo tên trên vỏ hộp hoặc đơn thuốc) để tôi kiểm tra tương tác và soạn lịch uống nháp.",
+            "meta": {"outcome": "need_input"},
         }
 
     # Ghi nguồn dữ liệu vào trace cho minh bạch
@@ -304,7 +305,7 @@ def answer(text: str) -> dict:
             "> *(Chỗ chặn an toàn: phát hiện dấu hiệu nguy hiểm nên hệ thống dừng toàn bộ luồng xếp lịch và không để người bệnh chờ dược sĩ online.)*"
             % "; ".join(rf["matched_flags"])
         )
-        return {"output": emergency_msg}
+        return {"output": emergency_msg, "meta": {"outcome": "emergency", "red_flags": rf["matched_flags"]}}
 
     # Bước 0b: Kiểm tra tấn công bỏ qua cảnh báo & yêu cầu ngoài thẩm quyền
     guard = _detect_guardrail(raw)
@@ -329,7 +330,10 @@ def answer(text: str) -> dict:
                 "\nNếu bạn cần kiểm tra tương tác và xếp lịch uống cho các thuốc mẹ đã được bác sĩ kê, "
                 "hãy gửi tên từng loại thuốc (trên vỏ hộp hoặc đơn thuốc)."
             )
-            return {"output": "\n".join(ref_lines)}
+            return {
+                "output": "\n".join(ref_lines),
+                "meta": {"outcome": "out_of_scope", "refusals": guard["refusals"]},
+            }
 
         # Nguyên tắc G10: thiếu thông tin -> thu hẹp phạm vi, hỏi lại ngắn gọn, không tự đoán
         note("dừng: thiếu tên thuốc cụ thể -> hỏi lại theo G10")
@@ -339,7 +343,8 @@ def answer(text: str) -> dict:
                 "Bạn vui lòng gửi giúp:\n"
                 "1. **Tên các loại thuốc mẹ đang uống** (ghi theo vỏ hộp hoặc đơn thuốc, ví dụ: *Metformin, Coversyl, Lipitor, Aspirin 81mg*).\n"
                 "2. *(Tuỳ chọn)* Có thuốc nào mới mua thêm ngoài đơn (như thuốc giảm đau, canxi, thuốc dạ dày) không?"
-            )
+            ),
+            "meta": {"outcome": "need_input"},
         }
 
     # Bước 2: Kiểm tra tương tác từng cặp thuốc đã nhận diện
@@ -387,7 +392,8 @@ def answer(text: str) -> dict:
     # Nếu đang chạy chế độ AI giả (CP2), trình bày output đầy đủ từ công cụ kèm ghi chú minh bạch là AI giả
     if reply.get("model") == "fake":
         note("chế độ AI giả (CP2): trả kết quả tổng hợp từ công cụ kèm nhãn mock")
-        return {"output": _format_mock_output(lookup, inter, schedule, handoff, guard, reply["text"])}
+        return {"output": _format_mock_output(lookup, inter, schedule, handoff, guard, reply["text"]),
+                "meta": _build_meta(lookup, inter, schedule, handoff, guard, raw, mode="mock")}
 
     # Chế độ model thật (CP3+): giữ câu trả lời của model và đảm bảo không rơi cảnh báo cứng / phiếu nháp
     text_out = reply["text"].strip()
@@ -411,4 +417,74 @@ def answer(text: str) -> dict:
     if append_blocks:
         text_out = text_out + "\n\n" + "\n".join(append_blocks)
 
-    return {"output": text_out}
+    return {"output": text_out,
+            "meta": _build_meta(lookup, inter, schedule, handoff, guard, raw, mode="real")}
+
+
+def _build_meta(lookup, inter, schedule, handoff, guard, raw_text, mode):
+    """Đóng gói kết quả có cấu trúc (phục vụ giao diện web). `output` vẫn là chuỗi hiển thị duy nhất
+    cho CLI/eval — meta chỉ thêm thông tin, không thay hợp đồng answer() -> {"output": str}."""
+    found = lookup["found"]
+    interactions = inter["interactions"]
+    has_nang = inter["counts"]["nang"] > 0
+    is_mock = mode == "mock"
+
+    overall = "emergency"  # sẽ bị ghi đè ở nhánh khác — nhánh này luôn có thuốc nhận diện được
+    if has_nang:
+        overall = "red"
+    elif guard["bypass_attack"] or guard["refusals"]:
+        overall = "guarded"
+    elif interactions:
+        overall = "yellow"
+    else:
+        overall = "green"
+
+    return {
+        "mode": mode,
+        "outcome": "checked",
+        "overall": overall,
+        "model": "fake" if is_mock else "real",
+        "data_sources": {"drugs": lookup["source"], "interactions": inter["source"]},
+        "drugs_found": [
+            {
+                "code": d["code"],
+                "generic_name": d["generic_name"],
+                "drug_class": d["drug_class"],
+                "match_type": d.get("match_type", "exact"),
+                "matched_term": d.get("matched_term", d["generic_name"]),
+            }
+            for d in found
+        ],
+        "fuzzy_matches": lookup["fuzzy_matches"],
+        "unknown_drugs": lookup["unknown"],
+        "interactions": [
+            {
+                "code": r["code"],
+                "drug_a": r["drug_a"],
+                "drug_b": r["drug_b"],
+                "severity": r["severity"],
+                "action": r["action"],
+                "summary": r["summary"],
+                "recommendation": r["recommendation"],
+            }
+            for r in interactions
+        ],
+        "interaction_counts": inter["counts"],
+        "checked_pairs": inter["checked_pairs"],
+        "schedule": {
+            "slots": schedule["slots"],
+            "held_for_pharmacist": schedule["held_for_pharmacist"],
+            "separation_notes": schedule["separation_notes"],
+            "is_draft": schedule["is_draft"],
+            "can_present_schedule": not has_nang,
+        },
+        "handoff": handoff,
+        "guardrails": {
+            "bypass_attack": guard["bypass_attack"],
+            "refusals": guard["refusals"],
+        },
+        "red_flags": check_red_flags(raw_text).get("matched_flags", []),
+        "note": ("Kết quả tổng hợp từ công cụ dữ liệu nhóm — đang chạy chế độ AI giả (CP2), chưa gọi model thật."
+                 if is_mock else
+                 "Kết quả do model AI tổng hợp trên căn cứ công cụ."),
+    }
