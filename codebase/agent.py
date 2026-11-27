@@ -10,6 +10,7 @@ Hợp đồng:
     answer(text: str) -> dict có khoá "output" (str).
     Chạy được với `python run.py`, `python run.py eval`, `python run.py simulate`.
 """
+import os
 import re
 
 from ai import call_model
@@ -305,7 +306,7 @@ def answer(text: str) -> dict:
             "> *(Chỗ chặn an toàn: phát hiện dấu hiệu nguy hiểm nên hệ thống dừng toàn bộ luồng xếp lịch và không để người bệnh chờ dược sĩ online.)*"
             % "; ".join(rf["matched_flags"])
         )
-        return {"output": emergency_msg, "meta": {"outcome": "emergency", "red_flags": rf["matched_flags"]}}
+        return {"output": emergency_msg, "meta": _empty_meta("emergency", red_flags=rf["matched_flags"])}
 
     # Bước 0b: Kiểm tra tấn công bỏ qua cảnh báo & yêu cầu ngoài thẩm quyền
     guard = _detect_guardrail(raw)
@@ -332,7 +333,7 @@ def answer(text: str) -> dict:
             )
             return {
                 "output": "\n".join(ref_lines),
-                "meta": {"outcome": "out_of_scope", "refusals": guard["refusals"]},
+                "meta": _empty_meta("out_of_scope", refusals=guard["refusals"]),
             }
 
         # Nguyên tắc G10: thiếu thông tin -> thu hẹp phạm vi, hỏi lại ngắn gọn, không tự đoán
@@ -344,7 +345,7 @@ def answer(text: str) -> dict:
                 "1. **Tên các loại thuốc mẹ đang uống** (ghi theo vỏ hộp hoặc đơn thuốc, ví dụ: *Metformin, Coversyl, Lipitor, Aspirin 81mg*).\n"
                 "2. *(Tuỳ chọn)* Có thuốc nào mới mua thêm ngoài đơn (như thuốc giảm đau, canxi, thuốc dạ dày) không?"
             ),
-            "meta": {"outcome": "need_input"},
+            "meta": _empty_meta("need_input"),
         }
 
     # Bước 2: Kiểm tra tương tác từng cặp thuốc đã nhận diện
@@ -421,6 +422,28 @@ def answer(text: str) -> dict:
             "meta": _build_meta(lookup, inter, schedule, handoff, guard, raw, mode="real")}
 
 
+def _empty_meta(outcome, refusals=None, red_flags=None):
+    """Meta tối giản cho các luồng dừng sớm (hỏi lại / ngoài phạm vi / cấp cứu) —
+    đủ cấu trúc để giao diện web render an toàn không lỗi."""
+    return {
+        "mode": "mock" if (os.environ.get("MODEL_PROVIDER") or "fake").lower() in ("", "fake") else "real",
+        "outcome": outcome,
+        "overall": "guarded" if outcome in ("out_of_scope", "emergency") else "green",
+        "drugs_found": [],
+        "fuzzy_matches": [],
+        "unknown_drugs": [],
+        "interactions": [],
+        "interaction_counts": {"nang": 0, "trung_binh": 0, "nhe": 0},
+        "checked_pairs": 0,
+        "schedule": {"slots": {"sang": [], "trua": [], "toi": []}, "held_for_pharmacist": [],
+                     "separation_notes": [], "is_draft": True, "can_present_schedule": False},
+        "handoff": None,
+        "guardrails": {"bypass_attack": False, "refusals": refusals or []},
+        "red_flags": red_flags or [],
+        "note": "Luồng dừng sớm — chưa kiểm tra tương tác.",
+    }
+
+
 def _build_meta(lookup, inter, schedule, handoff, guard, raw_text, mode):
     """Đóng gói kết quả có cấu trúc (phục vụ giao diện web). `output` vẫn là chuỗi hiển thị duy nhất
     cho CLI/eval — meta chỉ thêm thông tin, không thay hợp đồng answer() -> {"output": str}."""
@@ -429,7 +452,6 @@ def _build_meta(lookup, inter, schedule, handoff, guard, raw_text, mode):
     has_nang = inter["counts"]["nang"] > 0
     is_mock = mode == "mock"
 
-    overall = "emergency"  # sẽ bị ghi đè ở nhánh khác — nhánh này luôn có thuốc nhận diện được
     if has_nang:
         overall = "red"
     elif guard["bypass_attack"] or guard["refusals"]:

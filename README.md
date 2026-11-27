@@ -60,6 +60,7 @@ Trong README này lệnh viết là `python …`; máy nhóm cần `python3` hay
 | `python run.py simulate --try` | Thử mô phỏng chi phí 10 phiên (làm trước CP3) → `cost/simulate-try.csv` |
 | `python run.py simulate` | Mô phỏng chi phí khi dùng thật theo `cost/personas.yaml` (≥50 phiên) → `cost/simulate-N.csv` + `cost/simulate-N-summary.md` |
 | `python run.py simulate --rate-from eval/run-2.csv` | Như trên, lấy tỉ lệ đạt từ đúng lượt chỉ định. Không ghi thì khung lấy lượt `run-N` mới nhất đã chấm, cùng model, và ghi rõ đã lấy lượt nào trong bản tóm tắt |
+| `python run.py web` | **Giao diện web "Thuốc Nhà":** mở http://127.0.0.1:8000 trong trình duyệt. Nhập danh sách thuốc, 4 ca mẫu, kiểm tra tương tác, lịch nháp, phiếu hỏi dược sĩ. Cùng agent + dữ liệu với bản CLI |
 
 Gói miễn phí báo hết lượt: thêm `--wait 4` sau `eval` hoặc `simulate` (nghỉ 4 giây giữa hai lượt gọi). Sửa CSV bằng Excel: *File → Save As → CSV UTF-8*; Google Sheets: *Tệp → Tải xuống → CSV*.
 

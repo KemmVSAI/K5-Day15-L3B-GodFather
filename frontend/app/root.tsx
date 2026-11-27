@@ -32,19 +32,19 @@ const THEME_INIT_SCRIPT = getThemeInitScript();
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="vi" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+          content="width=device-width, initial-scale=1"
         />
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
         />
         {/* guard:allow-raw-color - theme-color metadata requires a concrete browser-chrome color. */}
-        <meta name="theme-color" content="#18181B" />
+        <meta name="theme-color" content="#F7F9F6" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta
           name="apple-mobile-web-app-status-bar-style"
