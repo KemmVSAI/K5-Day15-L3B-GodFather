@@ -45,4 +45,6 @@ Giả thuyết ở `evidence/hypothesis.md`: **đúng / sai / phải đổi** �
 
 | Vai | Giờ hẹn | Đã xong? |
 |---|---|---|
-| | | |
+| Người con (25–40 tuổi) sắp thuốc hộ cha mẹ cao tuổi | 20:00–21:30 Thứ Sáu 27/11 | Đang triển khai cho CP3 |
+| Người con (25–40 tuổi) mua và chia thuốc tuần cho mẹ | 20:00–21:30 Thứ Sáu 27/11 | Đang triển khai cho CP3 |
+| Người thân đang sắp thuốc nhiều loại mỗi ngày | 20:00–21:30 Thứ Sáu 27/11 | Đang triển khai cho CP3 |

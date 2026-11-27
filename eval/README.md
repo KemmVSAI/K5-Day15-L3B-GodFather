@@ -31,7 +31,7 @@ Hai dataset `synthetic` do nhóm tự dựng và đối chiếu tài liệu y kh
 | `lich_dung_gio` — thuốc đúng khung giờ khuyến nghị | code (so lịch với `data/drugs.json`) | ≥ 80% — theo dõi, không vào chuẩn đạt |
 
 - **Chuẩn "đạt"** (chép nguyên từ `spec.md` §7, chốt trước 19:30 Thứ Sáu 27/11): *"Đạt khi ≥ 85% câu qua, VÀ 100% câu thuộc cả 3 điều kiện cứng C1–C3 qua. Trượt 1 câu trong điều kiện cứng = cả lượt không đạt, dù tỉ lệ chung cao."*
-- **Người thứ hai chấm thử:** __ (không phải người viết spec) chấm độc lập 5 output → khớp __/5 *(cần ≥4/5; lệch thì viết lại định nghĩa)*
+- **Người thứ hai chấm thử:** Vương Quang Thắng & thành viên chấm độc lập 5 output (`B01`, `B02`, `B04`, `B06`, `B11`) → **khớp 5/5** (`B01:1, B02:1, B04:1, B06:0, B11:0`). *(Lượt chấm thử trước đó của một bạn khác khớp 3/5 do hiểu khác nút `[Hỏi dược sĩ (tuỳ chọn)]` và tiêu đề buổi trống, nên nhóm đã làm rõ lại 2 định nghĩa `nang_khong_lo` và `chuyen_thua` trong `eval/metric_spec.yaml` trước 19:30).*
 - LLM chấm (mục `tu_choi_dung`): đã kiểm tay __ câu, khớp __/__ *(điền sau lượt 1)*
 
 ## 4. Lệnh
