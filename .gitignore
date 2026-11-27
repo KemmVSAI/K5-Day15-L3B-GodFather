@@ -35,3 +35,13 @@ evidence/**/raw-*
 # Nguyên file data BTC cấp (data/preclass, data/training-ops… của repo đề): để ở đây, không commit
 data-btc
 data-btc/
+
+# Frontend build/runtime output and local data
+frontend/.agent-native/
+frontend/.deploy-tmp/
+frontend/.generated/
+frontend/.output/
+frontend/.react-router/
+frontend/build/
+frontend/data/
+frontend/node_modules/
