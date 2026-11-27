@@ -88,7 +88,7 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 
 ## Dùng AI vào việc gì
 
-2–3 dòng (bắt buộc): nhóm dùng công cụ AI nào để làm gì, người kiểm lại phần nào. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
+Model AI trong sản phẩm (OpenRouter — `nvidia/nemotron-3.5-lightning:free`) **chỉ viết lại câu tóm tắt rủi ro** dựa trên kết quả công cụ tra data; mọi quyết định an toàn (mức tương tác, khoá lịch, từ chối kê đơn) là code đọc `data/`. Coding agent (Claude Code) hỗ trợ viết code và trích xuất QĐ 5948/QĐ-BYT thành data; con người review từng commit. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
 
 ____
 

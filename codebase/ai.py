@@ -83,7 +83,7 @@ def _call_openai_compatible(system, user):
             data = _post_json(
                 URL_OPENROUTER,
                 {"Authorization": "Bearer " + API_KEY},
-                {"model": model_id, "messages": messages},
+                {"model": model_id, "messages": messages, "max_tokens": 2048},
             )
         except RuntimeError as e:
             last_error = e
