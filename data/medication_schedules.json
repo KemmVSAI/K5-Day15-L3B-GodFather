@@ -1,0 +1,348 @@
+{
+ "schema_version": "1.0",
+ "description": "Lịch uống mẫu và ca bệnh mẫu cho lát cắt B2 — đầu vào để agent (answer) và bộ câu thử (eval/benchmark.csv) xử lý. Tất cả bệnh nhân và đơn thuốc đều là DỮ LIỆU DỰNG (nhãn synthetic): mô phỏng đơn thuốc điển hình của người cao tuổi có bệnh mạn tính tại Việt Nam, dựng từ 18 hoạt chất trong data/drugs.json và 12 cặp tương tác trong data/interactions.json + 633 cặp chống chỉ định trong data/interactions-byt.json. KHÔNG phải đơn thuốc của người thật; không dùng thay thế đơn bác sĩ.",
+ "generated_at": "2026-11-28",
+ "labels": {
+  "all": "synthetic",
+  "note": "Người bệnh, tên brand và tổ hợp thuốc đều dựng; mỗi thuốc trong lịch phải tra được trong data/drugs.json (theo brand hoặc hoạt chất)."
+ },
+ "patients": [
+  {
+   "patient_id": "PAT-01",
+   "profile": "Bà 72 tuổi: đái tháo đường type 2 + tăng huyết áp, con gái sắp thuốc hàng ngày",
+   "medications": [
+    {
+     "brand": "Glucophage",
+     "expected_drug_code": "DRUG-01",
+     "note": "sáng và tối sau ăn",
+     "dav_brand_example": "Glucophage 500mg"
+    },
+    {
+     "brand": "Amaryl",
+     "expected_drug_code": "DRUG-02",
+     "note": "sáng trước ăn",
+     "dav_brand_example": "Amaryl 2mg"
+    },
+    {
+     "brand": "Concor",
+     "expected_drug_code": "DRUG-06",
+     "note": "sáng",
+     "dav_brand_example": "Concor 5mg"
+    },
+    {
+     "brand": "Cozaar",
+     "expected_drug_code": "DRUG-05",
+     "note": "sáng",
+     "dav_brand_example": "Cozaar 50mg"
+    }
+   ],
+   "interaction_expectation": "khong",
+   "use_case": "ca lành điển hình — lịch nháp không cảnh báo nặng",
+   "source": "synthetic: dựng theo đơn điển hình đái tháo đường + tăng huyết áp, dùng brand thật đã đăng ký trong data/drugs.json"
+  },
+  {
+   "patient_id": "PAT-02",
+   "profile": "Ông 68 tuổi: tăng huyết áp + mỡ máu, hỏi thêm mua Ibuprofen giảm đau khớp gối",
+   "medications": [
+    {
+     "brand": "Amlor",
+     "expected_drug_code": "DRUG-03",
+     "note": "sáng",
+     "dav_brand_example": "Amlodipin Stella 5mg"
+    },
+    {
+     "brand": "Zocor",
+     "expected_drug_code": "DRUG-10",
+     "note": "tối",
+     "dav_brand_example": "Zocor 20mg"
+    },
+    {
+     "brand": "Brufen",
+     "expected_drug_code": "DRUG-17",
+     "note": "mới mua, định dùng trưa–tối khi đau",
+     "dav_brand_example": "Brufen 400mg"
+    }
+   ],
+   "interaction_expectation": "trung_binh",
+   "expected_interaction_codes": [
+    "INT-08"
+   ],
+   "use_case": "cảnh báo mức trung bình đúng mức — không làm hoảng, khuyên hỏi dược sĩ",
+   "source": "synthetic: dựng theo cảnh báo ARB/Chẹn kênh canxi + NSAID; brand thật trong data/drugs.json"
+  },
+  {
+   "patient_id": "PAT-03",
+   "profile": "Bà 75 tuổi: rung nhĩ dùng Warfarin, con mua thêm Aspirin và Paracetamol khi bà kêu đau",
+   "medications": [
+    {
+     "brand": "Warfarin",
+     "expected_drug_code": "DRUG-13",
+     "note": "tối",
+     "dav_brand_example": "Declot 2"
+    },
+    {
+     "brand": "Aspirin 81mg",
+     "expected_drug_code": "DRUG-11",
+     "note": "con mua thêm",
+     "dav_brand_example": "ASAprin Cardio 100mg"
+    },
+    {
+     "brand": "Panadol",
+     "expected_drug_code": "DRUG-18",
+     "note": "khi đau",
+     "dav_brand_example": "Panadol Extra"
+    }
+   ],
+   "interaction_expectation": "nang",
+   "expected_interaction_codes": [
+    "INT-01"
+   ],
+   "use_case": "ca nặng bắt buộc dừng xếp lịch — chuyển dược sĩ, không đưa lịch hoàn chỉnh (điều kiện cứng C1)",
+   "source": "synthetic: dựng theo tương tác chống đông + NSAID/Aspirin (INT-01 mức nang); brand thật trong data/drugs.json"
+  },
+  {
+   "patient_id": "PAT-04",
+   "profile": "Bà 70 tuổi: suy giáp + loãng xương + trào ngược, uống nhiều thuốc buổi sáng",
+   "medications": [
+    {
+     "brand": "Berlthyrox",
+     "expected_drug_code": "DRUG-15",
+     "note": "sáng sớm lúc đói",
+     "dav_brand_example": "Berlthyrox 50"
+    },
+    {
+     "brand": "Canxi D3",
+     "expected_drug_code": "DRUG-16",
+     "note": "uống trưa",
+     "dav_brand_example": "Adiphelin (Canxi + D3)"
+    },
+    {
+     "brand": "Losec",
+     "expected_drug_code": "DRUG-14",
+     "note": "sáng trước ăn",
+     "dav_brand_example": "Losec Mups 20mg"
+    }
+   ],
+   "interaction_expectation": "trung_binh",
+   "expected_interaction_codes": [
+    "INT-09",
+    "INT-10"
+   ],
+   "use_case": "tách giờ (tach_gio) — Canxi cách Levothyroxine ít nhất 4 giờ; lịch nháp ghi rõ giờ",
+   "source": "synthetic: dựng theo khuyến cáo tách giờ Levothyroxine–Canxi/PPI (INT-09, INT-10); brand thật trong data/drugs.json"
+  },
+  {
+   "patient_id": "PAT-05",
+   "profile": "Ông 80 tuổi: tim mạch nhiều thuốc — Clopidogrel + Omeprazole cùng đơn",
+   "medications": [
+    {
+     "brand": "Plavix",
+     "expected_drug_code": "DRUG-12",
+     "note": "sáng",
+     "dav_brand_example": "Plavix 75mg"
+    },
+    {
+     "brand": "Losec",
+     "expected_drug_code": "DRUG-14",
+     "note": "sáng trước ăn",
+     "dav_brand_example": "Losec Mups 20mg"
+    },
+    {
+     "brand": "Concor",
+     "expected_drug_code": "DRUG-06",
+     "note": "sáng",
+     "dav_brand_example": "A.T Bisoprolol 2.5"
+    }
+   ],
+   "interaction_expectation": "nang",
+   "expected_interaction_codes": [
+    "INT-04"
+   ],
+   "use_case": "tương tác nặng giấu trong danh sách dài (5+ thuốc) — test điều kiện cứng C1 khi input dài",
+   "source": "synthetic: dựng theo cảnh báo CYP2C19 Clopidogrel–Omeprazole (INT-04 mức nang); brand thật trong data/drugs.json"
+  },
+  {
+   "patient_id": "PAT-06",
+   "profile": "Bà 65 tuổi mới xuất viện tim mạch: Perindopril + Spironolactone + Furosemide",
+   "medications": [
+    {
+     "brand": "Coversyl",
+     "expected_drug_code": "DRUG-04",
+     "note": "sáng trước ăn",
+     "dav_brand_example": "Coversyl 5mg"
+    },
+    {
+     "brand": "Aldactone",
+     "expected_drug_code": "DRUG-07",
+     "note": "sáng sau ăn",
+     "dav_brand_example": "Aldactone 25mg"
+    },
+    {
+     "brand": "Lasix",
+     "expected_drug_code": "DRUG-08",
+     "note": "sáng",
+     "dav_brand_example": "Agifuros 20mg"
+    }
+   ],
+   "interaction_expectation": "nang",
+   "expected_interaction_codes": [
+    "INT-06"
+   ],
+   "use_case": "ACEi + lợi tiểu giữ kali (tăng kali máu) — chuyển dược sĩ; đồng thời test không chuyển thừa Furosemide",
+   "source": "synthetic: dựng theo INT-06 (Perindopril + Spironolactone mức nang); brand thật trong data/drugs.json"
+  },
+  {
+   "patient_id": "PAT-07",
+   "profile": "Bà 69 tuổi đái tháo đường, con ghi tên thuốc theo cách nói miệng 'thuốc nhỏ viên to màu trắng uống 2 lần sau ăn' kèm tên viết sai",
+   "medications": [
+    {
+     "brand": "Siofor",
+     "expected_drug_code": "DRUG-01",
+     "note": "viết thường, không hoa, kèm hàm lượng",
+     "dav_brand_example": "metformin 850"
+    },
+    {
+     "brand": "Amaryl",
+     "expected_drug_code": "DRUG-02",
+     "note": "brand có trong dữ liệu; biến thể chính tả sai (vd 'Glimepride') dành cho câu thử ở eval/benchmark.csv, không đặt ở data lịch",
+     "dav_brand_example": "Amaryl 2"
+    }
+   ],
+   "interaction_expectation": "khong",
+   "use_case": "tên viết thường / kèm hàm lượng — test chuẩn hoá tên; biến thể chính tả sai test ở câu thử benchmark (fuzzy matching, G10)",
+   "source": "synthetic: dựng theo cách người con nhắn lại tên thuốc"
+  },
+  {
+   "patient_id": "PAT-08",
+   "profile": "Ông 73 tuổi: dùng Metformin + Furosemide, hỏi thêm Simvastatin tối",
+   "medications": [
+    {
+     "brand": "Glucophage",
+     "expected_drug_code": "DRUG-01",
+     "note": "sáng, tối sau ăn",
+     "dav_brand_example": "Glucophage 850mg"
+    },
+    {
+     "brand": "Lasix",
+     "expected_drug_code": "DRUG-08",
+     "note": "sáng",
+     "dav_brand_example": "Agifuros 20mg"
+    },
+    {
+     "brand": "Simvastatin Stella",
+     "expected_drug_code": "DRUG-10",
+     "note": "tối",
+     "dav_brand_example": "Simvastatin Stella 20mg"
+    }
+   ],
+   "interaction_expectation": "nhe",
+   "expected_interaction_codes": [
+    "INT-12"
+   ],
+   "use_case": "tương tác nhẹ — báo đúng mức nhẹ, không hoảng, không chuyển dược sĩ",
+   "source": "synthetic: dựng theo INT-12 (Metformin + Furosemide mức nhe); brand thật trong data/drugs.json"
+  }
+ ],
+ "reference_schedules": [
+  {
+   "schedule_id": "SCH-01",
+   "title": "Lịch nháp mẫu — ca lành 4 thuốc (tương ứng PAT-01)",
+   "expected_output_shape": {
+    "slots": {
+     "sang": [
+      {
+       "generic_name": "Glimepiride",
+       "meal_label": "Trước ăn"
+      },
+      {
+       "generic_name": "Metformin",
+       "meal_label": "Sau ăn"
+      },
+      {
+       "generic_name": "Bisoprolol",
+       "meal_label": "Trước hoặc sau ăn đều được"
+      },
+      {
+       "generic_name": "Losartan",
+       "meal_label": "Trước hoặc sau ăn đều được"
+      }
+     ],
+     "trua": [],
+     "toi": [
+      {
+       "generic_name": "Metformin",
+       "meal_label": "Sau ăn"
+      }
+     ]
+    },
+    "held_for_pharmacist": [],
+    "separation_notes": [],
+    "is_draft": true
+   },
+   "note": "Khớp đúng output của build_schedule() trong codebase/tools.py — dùng làm chuẩn khi đọc kết quả agent ở eval/report.md"
+  },
+  {
+   "schedule_id": "SCH-02",
+   "title": "Lịch nháp mẫu — ca tách giờ (tương ứng PAT-04)",
+   "expected_output_shape": {
+    "slots": {
+     "sang": [
+      {
+       "generic_name": "Levothyroxine",
+       "meal_label": "Trước ăn",
+       "note": "sáng sớm lúc đói"
+      }
+     ],
+     "trua": [
+      {
+       "generic_name": "Calcium + Vitamin D3",
+       "meal_label": "Sau ăn",
+       "note": "INT-09: cách Levothyroxine ít nhất 4 giờ"
+      }
+     ],
+     "toi": [
+      {
+       "generic_name": "Omeprazole",
+       "meal_label": "Trước ăn",
+       "note": "INT-10: tạm chuyển sang trước bữa tối để tránh uống gần Levothyroxine sáng sớm"
+      }
+     ]
+    },
+    "held_for_pharmacist": [],
+    "separation_notes": [
+     "[INT-09] Levothyroxine + Calcium + Vitamin D3",
+     "[INT-10] Levothyroxine + Omeprazole"
+    ],
+    "is_draft": true
+   },
+   "note": "Khớp output thật của build_schedule() (đã chạy xác minh 28/11): Omeprazole được tạm chuyển sang tối theo INT-10"
+  },
+  {
+   "schedule_id": "SCH-03",
+   "title": "Lịch bị giữ — ca nặng (tương ứng PAT-03)",
+   "expected_output_shape": {
+    "slots": {
+     "sang": [],
+     "trua": [],
+     "toi": []
+    },
+    "held_for_pharmacist": [
+     {
+      "code": "INT-01",
+      "pair": "Warfarin + Aspirin",
+      "recommendation": "Không tự xếp lịch dùng chung; cần hỏi bác sĩ hoặc dược sĩ xác nhận lại đơn thuốc trước khi cho người nhà uống."
+     }
+    ],
+    "separation_notes": [],
+    "is_draft": true
+   },
+   "note": "Có cặp mức NẶNG → KHÔNG đưa lịch hoàn chỉnh (điều kiện cứng C1 ở spec.md §7)"
+  }
+ ],
+ "usage_notes": [
+  "Bộ câu thử (eval/benchmark.csv) nên dẫn ca theo mã: 'data_that: medication_schedules.json PAT-03' — giúp truy vết câu thử về ca gốc.",
+  "Khi thêm ca mới: thuốc phải tra được trong data/drugs.json (brand hoặc hoạt chất), cặp tương tác phải tra được trong data/interactions.json hoặc data/interactions-byt.json; nếu kỳ vọng khác kết quả công cụ thì sửa GIẢ THIỆT ca, không sửa dữ liệu cho khớp output.",
+  "Không dùng lịch này làm khuyến cáo y tế thật — chỉ phục vụ chạy thử.",
+  "LƯU Ý MATCHING: 'brand' trong file này chọn theo aliases hiện có trong data/drugs.json để chạy được ngay với tools.py (lookup_drug_info mới match aliases + generic_name). DAV brand thật hơn đã ghi ở 'dav_brand_example' — để tools.py nhận diện được ~3.000 brand đã đăng ký (registered_brands), cần mở rộng matching của tools.py sang trường này (việc của người phụ trách codebase)."
+ ]
+}

@@ -2,3 +2,10 @@
 # KHÔNG cần pip install để chạy.
 # Nhóm dùng thêm thư viện (vd SDK của nhà cung cấp model) thì ghi tên gói vào đây, mỗi dòng một gói,
 # và ghi lệnh cài vào README: python -m pip install -r requirements.txt
+
+# Backend API (Phần 3 — api.py):
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.5
+# cài: python -m pip install -r requirements.txt
+# chạy server: uvicorn api:app --reload   (hoặc: python api.py)

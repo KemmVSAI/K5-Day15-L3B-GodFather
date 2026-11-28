@@ -1,13 +1,24 @@
-import { defineConfig } from 'vitest/config';
-import { fileURLToPath, URL } from 'node:url';
+import path from "node:path";
+
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      "@": [
+        path.resolve(__dirname, "./app"),
+        path.resolve(__dirname, "./src"),
+      ],
+      "@shared": path.resolve(__dirname, "./shared"),
     },
   },
   test: {
-    environment: 'happy-dom',
+    env: { DATABASE_URL: "pglite:memory" },
+    exclude: [
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/dist/**",
+      "**/.react-router/**",
+    ],
   },
 });

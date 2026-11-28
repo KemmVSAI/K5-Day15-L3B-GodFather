@@ -42,6 +42,63 @@ MODEL_PROVIDER = (os.environ.get("MODEL_PROVIDER") or "fake").strip().lower()
 MODEL_NAME = (os.environ.get("MODEL_NAME") or "").strip()
 API_KEY = (os.environ.get("API_KEY") or "").strip()
 
+# ---------------------------------------------------------------------------
+# Gọi model thật — nhà cung cấp hiện dùng: OpenRouter (API chuẩn OpenAI, gói free)
+# MODEL_NAME để trống trong .env thì dùng mặc định dưới đây (model free, chọn ngày 28/11/2026):
+#   nvidia/nemotron-3.5-lightning:free — ổn định, tiếng Việt tốt; khi rate-limit tự thử model dự phòng.
+# ---------------------------------------------------------------------------
+URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
+_OPENROUTER_FALLBACKS = [
+    "nvidia/nemotron-3.5-lightning:free",
+    "particle-ai/particle-1:free",
+]
+
+import json  # noqa: E402
+import urllib.error  # noqa: E402
+import urllib.request  # noqa: E402
+
+
+def _post_json(url, headers, body, timeout=60):
+    """Gửi POST JSON, trả về JSON phản hồi. Chỉ dùng thư viện chuẩn (urllib)."""
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode("utf-8"), method="POST",
+        headers=dict({"Content-Type": "application/json"}, **headers))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
+
+
+def _call_openai_compatible(system, user):
+    """Gọi API chuẩn OpenAI (OpenRouter, DeepSeek…). Rate-limit (429) thì thử model dự phòng."""
+    candidates = [MODEL_NAME] if MODEL_NAME else []
+    candidates += [m for m in _OPENROUTER_FALLBACKS if m not in candidates]
+    last_error = None
+    for model_id in candidates:
+        messages = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": "user", "content": user}
+        ]
+        try:
+            data = _post_json(
+                URL_OPENROUTER,
+                {"Authorization": "Bearer " + API_KEY},
+                {"model": model_id, "messages": messages},
+            )
+        except RuntimeError as e:
+            last_error = e
+            if "HTTP 429" in str(e) or "HTTP 502" in str(e) or "HTTP 503" in str(e):
+                continue  # rate-limit upstream: thử model dự phòng
+            raise
+        u = data.get("usage") or {}
+        return {
+            "text": (data["choices"][0]["message"]["content"] or "").strip(),
+            "model": data.get("model") or model_id,
+            "tokens_in": int(u.get("prompt_tokens") or 0),
+            "tokens_out": int(u.get("completion_tokens") or 0),
+        }
+    raise last_error or RuntimeError("không gọi được model nào")
+
 
 @model_call
 def call_model(system: str, user: str) -> dict:
@@ -49,8 +106,28 @@ def call_model(system: str, user: str) -> dict:
         last = (user.strip().splitlines() or [""])[-1]
         return {"text": "[câu trả lời giả — chưa nối model] " + last[:60], "model": "fake", "tokens_in": 0, "tokens_out": 0}
 
-    # NHÓM VIẾT: gọi model thật ở đây (theo MODEL_PROVIDER, MODEL_NAME, API_KEY) rồi trả đúng 4 khoá.
-    # Ví dụ chép được cho từng nhà cung cấp: docs/connect-model.md mục 2.
-    raise NotImplementedError(
-        "chưa viết phần gọi model thật cho MODEL_PROVIDER=%s trong codebase/ai.py — xem docs/connect-model.md"
-        % MODEL_PROVIDER)
+    if MODEL_PROVIDER in ("openrouter", "openai"):
+        r = _call_openai_compatible(system, user)
+    elif MODEL_PROVIDER == "anthropic":
+        r = _call_claude(system, user)
+    else:
+        raise NotImplementedError(
+            "chưa viết phần gọi model thật cho MODEL_PROVIDER=%s trong codebase/ai.py — xem docs/connect-model.md"
+            % MODEL_PROVIDER)
+    return {"text": r["text"], "model": r["model"],
+            "tokens_in": int(r["tokens_in"]), "tokens_out": int(r["tokens_out"])}
+
+
+URL_CLAUDE = "https://api.anthropic.com/v1/messages"
+
+
+def _call_claude(system, user):
+    data = _post_json(
+        URL_CLAUDE,
+        {"x-api-key": API_KEY, "anthropic-version": "2023-06-01"},
+        {"model": MODEL_NAME, "max_tokens": 1024, "system": system or "",
+         "messages": [{"role": "user", "content": user}]})
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    u = data.get("usage") or {}
+    return {"text": text, "model": data.get("model") or MODEL_NAME,
+            "tokens_in": int(u.get("input_tokens") or 0), "tokens_out": int(u.get("output_tokens") or 0)}
