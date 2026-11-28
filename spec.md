@@ -15,7 +15,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không —
 - Việc họ cố làm xong (`động từ + đối tượng + bối cảnh`, không có chữ AI): xếp và cập nhật lịch uống trong ngày cho cha mẹ khi đơn thuốc đổi, không bỏ sót giờ và không trùng giờ
 - Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ: giấy dán tủ lạnh + gọi nhà thuốc + tra mạng từng viên — hỏng ở chỗ không ai kiểm *tổng thể* cặp kị nhau, tối muộn không ai hỏi được; chưa bỏ vì chưa có công cụ thay thế
 - Pain (KHÔNG chữ AI): người con — đang xếp lại lịch sau mỗi lần đổi đơn — vướng ở không tra được cặp thuốc kị nhau và không có ai hỏi lúc tối — hậu quả lịch uống chồng giờ / bỏ sót tương tác nặng, tai biến khó đảo ngược (ví dụ thật: bán nhầm Klamentin cho người dị ứng Amoxicillin → cấp cứu — `evidence/data-mining.md` ví dụ 6)
-- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): 30/150 (20%) review App Store VN 3 app nhà thuốc lớn phàn nàn kênh hỏi dược sĩ; 50/150 (33%) review tiêu cực nhắc người thân; P1 kể được lần tự xếp 15–20 phút/lần, 3–4 lần/tháng — **kênh hỏi hiện tại nghẽn, người mua không phải người dùng thuốc**
+- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): 30/150 (20%) review App Store VN 3 app nhà thuốc lớn phàn nàn kênh hỏi dược sĩ; 50/150 (33%) review tiêu cực nhắc người thân; P1 kể được lần tự xếp 15–20 phút/lần, 3–4 lần/tháng; khảo sát (N=18, 4/18 hỗ trợ người thân ≥60 tuổi) cho thấy 4/4 uống ≥4 loại thuốc và 4/4 phải tự kiểm tra cả tương tác lẫn tách giờ uống — **kênh hỏi hiện tại dễ nghẽn, người mua không phải người dùng thuốc, nhu cầu kiểm tương tác & tách giờ là 4/4 ở nhóm khảo sát đúng vai**
 
 ## §2. Impact & quyết định chọn *(guide 1.3)*
 
@@ -149,6 +149,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không —
 | 28/11 ~02:00 | Ghép frontend web của Nhật; sửa decode UTF-8, /api/presets, timeout 180s, badge model | lỗi 500 decode; model reasoning chậm 40–90s/câu — timeout 65s cũ không đủ |
 | 28/11 ~03:30 | Bằng chứng pain: đào 150 review App Store VN (3 app) + phỏng vấn P1 | guide 1.2 — CP3 cần ≥1 nguồn đạt ngưỡng + ≥5 trích; script `evidence/count_reviews.py` chạy lại được |
 | 28/11 ~03:40 | spec §0–§3 điền | CP3 yêu cầu §0–§7 nộp |
+| 28/11 ~14:36 | Bổ sung kết quả khảo sát vào `evidence/survey/` (`responses.csv`, `summary.md`), `evidence/summary.md`, `spec.md` §1 | Ghi nhận 18 phản hồi khảo sát (4/18 đúng vai hỗ trợ người thân ≥60 tuổi) làm nguồn kiểm lại bổ sung |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 
