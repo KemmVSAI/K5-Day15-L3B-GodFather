@@ -1,21 +1,19 @@
 """backend_agent.py — Phần 2 của Backend (theo tài liệu phân công 3 phần).
 
 Suy luận, xếp lịch 4 khung giờ & Guardrail cho tầng API:
-    analyze_medications(medications, notes) → dict đúng JSON Contract (mục 3 tài liệu phân công)
+    analyze_medications(medications, notes="", trace_id="api") → dict đúng JSON Contract (phancong.md §3.2)
 
 Nguyên tắc (khớp spec.md §4/§7):
     - Mọi kết quả ĐỌC từ data qua backend_tools (không để AI bịa tương tác / kê thêm thuốc).
-    - Guardrail cứng (code, không phụ thuộc AI):
-        * Tương tác mức ĐỎ (nang)      → schedule_locked = true, escalate_to_pharmacist = true
-        * Thuốc không nhận diện được    → escalate_to_pharmacist = true, không xếp lịch cho thuốc lạ
-        * Yêu cầu kê đơn / dấu hiệu cấp cứu (notes) → từ chối + escalate
-    - AI (call_model) chỉ viết lời văn tóm tắt; khung fallback sang text dựng sẵn khi:
-      .env chưa có MODEL_PROVIDER (chế độ mock CP2), model lỗi, hoặc hết giờ — API không chết.
-    - Suy luận xếp lịch (4 khung giờ + lý do tách giờ) làm bằng CODE từ recommended_slots
-      trong data — AI không xếp giờ.
-
-Không tác động ra ngoài: handoff chỉ là tóm tắt văn bản cho người dùng copy.
+    - Guardrail cứng bằng CODE (không phụ thuộc AI):
+        * Dấu hiệu cấp cứu (đau ngực, khó thở...) → risk_level="RED", khóa toàn bộ lịch, chỉ dẫn gọi 115.
+        * Tương tác mức ĐỎ (nang)                 → risk_level="RED", schedule_locked=True, escalate=True, loại thuốc dính cặp ĐỎ khỏi lịch.
+        * Thuốc không nhận diện được              → không xếp lịch cho thuốc lạ, escalate=True.
+        * Trùng hoạt chất (Panadol + Efferalgan)  → cảnh báo YELLOW kèm pair đầy đủ, escalate=True.
+        * Yêu cầu kê đơn / liều lượng             → từ chối + escalate=True.
+    - AI (call_model) chỉ viết lời văn risk_summary; fallback sang text dựng sẵn khi chạy mock hoặc model lỗi.
 """
+import json
 import os
 import re
 import sys
@@ -28,13 +26,11 @@ import backend_tools  # noqa: E402
 from ai import call_model  # noqa: E402
 from tracing import begin as _trace_begin, end as _trace_end, note  # noqa: E402
 
-# Khung giờ 4-slot của Frontend (khác 3 slot trong data) — map từ recommended_slots
 SLOT_MAP = {
     "sang": "morning",
     "trua": "noon",
     "toi": "evening",
 }
-BEDTIME_HINTS = ("ngu", "dem", "trc khi ngu", "before bed", "bedtime")
 
 SYSTEM_PROMPT = """Bạn là trợ lý hỗ trợ người con sắp thuốc cho cha mẹ cao tuổi (Track B2 — kiểm tra tương tác thuốc & lịch uống).
 BẮT BUỘC:
@@ -45,100 +41,27 @@ BẮT BUỘC:
 5. Không chẩn đoán bệnh, không tư vấn liều, không khuyên tự ý ngừng/thay thuốc kê đơn.
 6. Văn phong: tiếng Việt, ngắn gọn, thân thiện với người con chưa học y."""
 
-_DURATION_WARN = "Đây là lịch NHÁP hỗ trợ sắp thuốc — người con cần đối chiếu đơn bác sĩ và xác nhận trước khi cho người nhà dùng."
-
-
-# ---------------------------------------------------------------------------
-# Xếp lịch 4 khung giờ — bằng CODE từ kết quả chuẩn hóa + tách giờ từ tương tác
-# ---------------------------------------------------------------------------
-def _build_schedule_v2(norm_result, inter_result):
-    """Xây schedule {morning, noon, evening, bedtime} từ backend_tools kết quả.
-
-    - Thuốc unknown KHÔNG được xếp lịch (C2).
-    - Cặp tách giờ (action=tach_gio trong data): đẩy một bên sang khung khác + note lý do.
-    - Cặp mức ĐỎ: schedule_locked = true — vẫn soạn lịch "không dùng chung" để UI khoá.
-    """
-    slots = {"morning": [], "noon": [], "evening": [], "bedtime": []}
-    schedule_locked = False
-    separation_notes = []
-    sep_applied = {}  # drug_code -> note lý do bị đổi khung
-
-    hard_pairs = []
-    for p in inter_result.get("pairs_input", []):
-        if p["severity"] == "nang":
-            hard_pairs.append(p)
-
-    # Tách giờ cứng theo cặp đã biết trong data (INT-09/INT-10 Levothyroxine)
-    for p in inter_result.get("pairs_input", []):
-        if p.get("action") == "tach_gio" or "tach gio" in _vi_norm(p.get("recommendation", "")):
-            a, b = p["pair_ingredients"]
-            # Levothyroxine sáng sớm — chất kia đẩy sang trưa/tối
-            for ing_a, ing_b in ((a, b), (b, a)):
-                if _vi_norm(ing_a).startswith("levothyrox"):
-                    sep_applied[_drug_code_of(norm_result, ing_b)] = (
-                        "Tách với %s ít nhất 4 giờ (nguồn: %s [%s])"
-                        % (ing_a, p.get("source", "data/interactions.json"), p["code"])
-                    )
-                    separation_notes.append(
-                        "%s + %s: xếp lệch khung giờ (tối thiểu 4 giờ) [%s]"
-                        % (p["pair_inputs"][0], p["pair_inputs"][1], p["code"])
-                    )
-
-    for entry in norm_result.get("normalized", []):
-        if not entry.get("matched"):
-            continue  # thuốc lạ không được xếp lịch (C2)
-        code = entry["drug_code"]
-        base_slots = entry.get("slots") or ["morning"]
-        meal_label = entry.get("meal_label") or "Trước hoặc sau ăn"
-        timing = meal_label
-        note_text = entry.get("timing_note") or ""
-
-        # Quy tắc đặc biệt: statin uống tối (data đã ghi slots=['toi']); warfarin → bedtime-friendly
-        if code in sep_applied:
-            # đẩy sang khung khác buổi sáng (ưu tiên trưa, nếu thuốc gốc là trưa thì tối)
-            alt = "evening" if "trua" in base_slots else "noon"
-            target = SLOT_MAP.get(alt, alt)
-            note_text = (note_text + " | " if note_text else "") + sep_applied[code]
-        else:
-            target = SLOT_MAP.get(base_slots[0], base_slots[0])
-
-        # bedtime: chỉ khi timing_note nhắc uống đêm / trước khi ngủ, hoặc warfarin (uống tối cố định)
-        if "bedtime" not in slots and _vi_norm(note_text).find("ngu") >= 0:
-            target = "bedtime"
-        if _vi_norm(entry.get("ingredient", "")) == "warfarin":
-            target = "bedtime"
-
-        # trạng thái khoá nếu thuốc dính cặp ĐỎ
-        in_hard = any(
-            _vi_norm(entry["ingredient"]) in [_vi_norm(x) for x in p["pair_ingredients"]]
-            for p in hard_pairs
-        )
-        if in_hard:
-            schedule_locked = True
-            note_text = (note_text + " | " if note_text else "") + (
-                "THUỐC DÍNH CẶP TƯƠNG TÁC MỨC ĐỎ — KHÔNG tự ý dùng chung, chờ bác sĩ/dược sĩ xác nhận."
-            )
-
-        slots.setdefault(target, []).append({
-            "name": entry["input"],
-            "ingredient": entry["ingredient"],
-            "drug_code": code,
-            "timing": timing,
-            "note": note_text or "—",
-        })
-
-    # sort theo tên để ổn định
-    for k in slots:
-        slots[k].sort(key=lambda x: (x["drug_code"] or "ZZ", x["name"]))
-    return {
-        "schedule": slots,
-        "schedule_locked": schedule_locked,
-        "separation_notes": separation_notes,
-    }
+_EMERGENCY_PATTERNS = (
+    "dau nguc", "tuc nguc", "kho tho", "tho gap", "bat tinh", "co giat",
+    "mat tri giac", "non ra mau", "non mau", "oi ra mau", "ho ra mau",
+    "di ngoai phan den", "phan den", "chay mau khong cam", "ngat xiu",
+    "yeu liet", "liet nua nguoi", "meo mieng", "noi ngong", "soc phan ve",
+)
+_PRESCRIBE_PATTERNS = (
+    "ke them thuoc", "ke don", "ke thuoc", "ke giup", "cho thuoc gi",
+    "nen mua thuoc gi", "mua them thuoc gi", "thuoc thay the",
+    "mua khang sinh", "khang sinh khong can don", "doi sang thuoc gi",
+)
+_NEGATIONS = ("khong bi ", "khong co ", "chua bi ", "khong thay ", "khong ")
 
 
 def _vi_norm(s):
     return backend_tools._norm(s or "")
+
+
+def _has_phrase(norm_text, phrase):
+    """So khớp theo ranh giới từ để tránh bắt nhầm (vd 'mua them thuoc gi' != 'mua them thuoc giam dau')."""
+    return bool(re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", norm_text))
 
 
 def _drug_code_of(norm_result, ingredient):
@@ -148,277 +71,228 @@ def _drug_code_of(norm_result, ingredient):
     return ingredient
 
 
-# ---------------------------------------------------------------------------
-# Guardrail cứng (code) — không phụ thuộc AI
-# ---------------------------------------------------------------------------
-_EMERGENCY_PATTERNS = (
-    "dau nguc", "kho tho", "bat tinh", "co giat", "mat tri giac", "ngo mau", "non mau",
-    "dau dau du doi", "yeu liet", "liet nua nguoi", "noi mau tieu hoa", "phu phe",
-)
-_PRESCRIBE_PATTERNS = (
-    "ke them thuoc", "ke don", "cho thuoc gi", "nen mua thuoc gi", "thuoc thay the",
-    "mua khang sinh", "khang sinh khong can don", "doi sang thuoc gi",
-)
-
-
 def _detect_hard_guardrails(medications, notes):
-    """Trả {emergency, prescribe_request} từ notes — mức ĐỎ tuyệt đối, không AI quyết."""
+    """Phát hiện dấu hiệu cấp cứu và yêu cầu kê đơn/thêm thuốc bằng quy tắc cứng."""
     text = _vi_norm(" ".join(list(medications or []) + [notes or ""]))
-    emergency = any(p in text for p in _EMERGENCY_PATTERNS)
-    prescribe = any(p in text for p in _PRESCRIBE_PATTERNS)
-    return {"emergency": emergency, "prescribe_request": prescribe}
+    emergency_hits = []
+    for p in _EMERGENCY_PATTERNS:
+        m = re.search(r"(?<!\w)" + re.escape(p) + r"(?!\w)", text)
+        if not m:
+            continue
+        prefix = text[max(0, m.start() - 14):m.start()]
+        if any(prefix.endswith(neg) for neg in _NEGATIONS):
+            continue
+        emergency_hits.append(p)
+    prescribe = any(_has_phrase(text, p) for p in _PRESCRIBE_PATTERNS)
+    return {"emergency": bool(emergency_hits), "emergency_hits": emergency_hits, "prescribe_request": prescribe}
 
 
-# ---------------------------------------------------------------------------
-# Phiếu tóm tắt gửi dược sĩ (người con copy gửi Zalo)
-# ---------------------------------------------------------------------------
-def _build_pharmacist_summary(medications, norm_result, inter_result, guard):
-    drugs_input = [str(m).strip() for m in (medications or []) if str(m).strip()]
-    lines = ["Chào dược sĩ,"]
-    lines.append("Mẹ/bố tôi đang dùng: %s." % (", ".join(drugs_input) or "(danh sách thuốc)"))
-    if norm_result.get("unknown_meds"):
-        lines.append(
-            "Các thuốc chưa có trong dữ liệu của hệ thống: %s."
-            % ", ".join(norm_result["unknown_meds"])
-        )
-    pairs = inter_result.get("pairs_input", [])
-    if pairs:
-        red = [p for p in pairs if p["severity"] == "nang"]
-        if red:
-            lines.append(
-                "Hệ thống cảnh báo tương tác mức ĐỎ: %s."
-                % "; ".join("%s + %s (%s)" % (p["pair_inputs"][0], p["pair_inputs"][1], p["code"]) for p in red)
-            )
-        yellow = [p for p in pairs if p["severity"] != "nang"]
-        if yellow:
-            lines.append(
-                "Các cặp cần lưu ý thêm: %s."
-                % "; ".join("%s + %s (%s)" % (p["pair_inputs"][0], p["pair_inputs"][1], p["code"]) for p in yellow)
-            )
-    else:
-        lines.append("Hệ thống chưa ghi nhận cặp tương tác trong dữ liệu hiện có.")
-    if guard.get("emergency"):
-        lines.append("Có dấu hiệu nguy hiểm (cần đi khám ngay — không chờ phản hồi).")
-    lines.append("Xin dược sĩ cho ý kiến: có nên dùng chung không và nếu dùng thì sắp giờ uống thế nào cho an toàn?")
-    return " ".join(lines)
+def _format_timing(entry, target_slot):
+    ing = _vi_norm(entry.get("ingredient", ""))
+    meal_rel = entry.get("meal_relation", "bat_ky")
+    slot_noun = {"morning": "ăn sáng", "noon": "ăn trưa", "evening": "ăn tối", "bedtime": "khi ngủ"}.get(target_slot, "ăn")
+    if ing.startswith("levothyrox") and target_slot == "morning":
+        return "Trước ăn sáng 30–60 phút (lúc đói)"
+    if ing == "omeprazole":
+        return "Trước %s 30 phút" % slot_noun
+    if target_slot == "bedtime":
+        return "Buổi tối cố định / trước ngủ"
+    if meal_rel == "truoc_an":
+        return "Trước %s" % slot_noun
+    if meal_rel == "sau_an":
+        return "Sau %s" % slot_noun
+    return "Trước hoặc sau %s đều được" % slot_noun
 
 
-# ---------------------------------------------------------------------------
-# Risk level tổng hợp
-# ---------------------------------------------------------------------------
-def _risk_level(norm_result, inter_result, guard):
-    if guard.get("emergency"):
+def _build_schedule_v2(norm_result, inter_result, dup_result):
+    """Xây schedule {morning, noon, evening, bedtime} bằng CODE từ kết quả chuẩn hóa + tách giờ.
+
+    - Thuốc unknown KHÔNG được xếp lịch (C2).
+    - Cặp mức ĐỎ: schedule_locked = True và LOẠI thuốc dính cặp ĐỎ khỏi lịch (chỉ giữ thuốc độc lập an toàn như Omeprazole).
+    - Cặp tách giờ (action=tach_gio): đẩy thuốc tương ứng sang buổi khác kèm lý do tách ≥ 4 giờ.
+    - Trùng hoạt chất (Panadol + Efferalgan): gom thành 1 thẻ "chọn 1 sản phẩm khi cần", tránh người dùng uống gộp.
+    """
+    slots = {"morning": [], "noon": [], "evening": [], "bedtime": []}
+    separation_notes = []
+    sep_applied = {}
+
+    hard_pairs = [p for p in inter_result.get("pairs_input", []) if p["severity"] == "nang"]
+    hard_ingredients = {
+        _vi_norm(ing) for p in hard_pairs for ing in p.get("pair_ingredients", [])
+    }
+    schedule_locked = bool(hard_pairs)
+
+    for p in inter_result.get("pairs_input", []):
+        if p.get("action") == "tach_gio" or "tach gio" in _vi_norm(p.get("recommendation", "")):
+            a, b = p["pair_ingredients"]
+            for ing_a, ing_b in ((a, b), (b, a)):
+                if _vi_norm(ing_a).startswith("levothyrox"):
+                    sep_applied[_drug_code_of(norm_result, ing_b)] = (
+                        "Tách %s tối thiểu 4 giờ [%s]" % (ing_a, p["code"])
+                    )
+                    separation_notes.append(
+                        "%s + %s: xếp lệch khung giờ (tối thiểu 4 giờ) [%s]"
+                        % (p["pair_inputs"][0], p["pair_inputs"][1], p["code"])
+                    )
+
+    dup_by_code = {d["drug_code"]: d for d in dup_result.get("duplicates", []) if d.get("drug_code")}
+    dup_emitted = set()
+
+    for entry in norm_result.get("normalized", []):
+        if not entry.get("matched"):
+            continue
+        code = entry["drug_code"]
+        ing_norm = _vi_norm(entry.get("ingredient", ""))
+
+        # Guardrail C1: khóa và không xếp lịch các thuốc dính cặp tương tác ĐỎ
+        if ing_norm in hard_ingredients:
+            continue
+
+        # Trùng hoạt chất: chỉ hiển thị 1 thẻ cảnh báo chọn 1 sản phẩm khi cần
+        if code in dup_by_code:
+            if code in dup_emitted:
+                continue
+            dup_emitted.add(code)
+            d_info = dup_by_code[code]
+            slots["morning"].append({
+                "name": "%s (chọn 1 sản phẩm)" % " / ".join(d_info["inputs"]),
+                "timing": "Khi cần (cách nhau ≥ 4–6 giờ)",
+                "note": "Chỉ chọn 1 trong 2 (%s) khi cần; KHÔNG uống gộp vì trùng hoạt chất %s."
+                % (" / ".join(d_info["inputs"]), d_info["ingredient"]),
+            })
+            continue
+
+        base_slots = entry.get("slots") or ["sang"]
+        note_text = entry.get("timing_note") or ""
+
+        if code in sep_applied:
+            # Nếu thuốc gốc ở buổi sáng (vd Omeprazole) thì đẩy tối; nếu Canxi giữ trưa (cách Levothyroxine ≥ 4 giờ)
+            target_slots = ["noon"] if ing_norm.startswith("calcium") else ["evening"]
+            note_text = (sep_applied[code] + ". " + note_text).strip()
+        else:
+            target_slots = [SLOT_MAP.get(s, s) for s in base_slots if SLOT_MAP.get(s, s) in slots] or ["morning"]
+
+        if ing_norm == "warfarin":
+            target_slots = ["bedtime"]
+
+        for target in target_slots:
+            slots[target].append({
+                "name": entry["input"],
+                "timing": _format_timing(entry, target),
+                "note": note_text or "Uống theo đúng chỉ dẫn trên đơn bác sĩ.",
+            })
+
+    return {
+        "schedule": slots,
+        "schedule_locked": schedule_locked,
+        "separation_notes": separation_notes,
+    }
+
+
+def _risk_level(norm_result, inter_result, dup_result, guard):
+    if guard.get("emergency") or guard.get("prescribe_request"):
         return "RED"
-    highest = inter_result.get("highest_severity", "khong")
-    if highest == "nang":
+    if inter_result.get("counts", {}).get("nang", 0) > 0:
         return "RED"
-    if norm_result.get("unknown_meds"):
-        return "YELLOW"
-    if highest == "trung_binh" or highest == "nhe":
-        return "YELLOW"
-    if norm_result.get("fuzzy_matches") or inter_result.get("pairs_input"):
+    if not norm_result.get("ingredients") and norm_result.get("unknown_meds"):
+        return "RED"
+    if inter_result.get("counts", {}).get("trung_binh", 0) > 0 or dup_result.get("count", 0) > 0 or norm_result.get("unknown_meds"):
         return "YELLOW"
     return "GREEN"
 
 
-# ---------------------------------------------------------------------------
-# Hàm chính cho tầng API
-# ---------------------------------------------------------------------------
-def analyze_medications(medications, notes=None, trace_id="api"):
-    """Đầu vào: medications list[str] (tên thuốc gõ tự do), notes str (tuỳ chọn).
-    Đầu ra: dict đúng JSON Contract mục 3.2 của tài liệu phân công.
-    Không tác động ra ngoài (phiếu dược sĩ chỉ là text để copy)."""
-    medications = [str(m).strip() for m in (medications or []) if str(m).strip()]
-    notes = (notes or "").strip()
-
-    _trace_begin(trace_id)
-    try:
-        guard = _detect_hard_guardrails(medications, notes)
-        note("guardrail: %s" % guard)
-
-        # Cấp cứu → dừng toàn bộ, không xếp lịch
-        if guard["emergency"]:
-            _trace_end()
-            return {
-                "risk_level": "RED",
-                "risk_summary": "Phát hiện dấu hiệu nguy hiểm (đau ngực/khó thở…). Dừng sắp lịch thuốc — đưa người bệnh đi cơ sở y tế hoặc gọi 115 NGAY.",
-                "escalate_to_pharmacist": True,
-                "interactions": [],
-                "schedule_locked": True,
-                "schedule": {"morning": [], "noon": [], "evening": [], "bedtime": []},
-                "pharmacist_summary": _build_pharmacist_summary(medications, {"unknown_meds": []}, {"pairs_input": []}, guard),
-                "trace": {
-                    "normalized_ingredients": [],
-                    "tool_lookups": ["check_red_flags: phát hiện dấu hiệu cấp cứu → dừng luồng (spec §4)"],
-                    "guardrail_decision": "Guardrail cấp cứu: dừng mọi bước, chỉ dẫn gọi 115.",
-                },
-            }
-
-        norm_result = backend_tools.normalize_medications(medications)
-        dup_result = backend_tools.check_duplicates(norm_result)
-        inter_result = backend_tools.lookup_interactions(norm_result)
-        sched = _build_schedule_v2(norm_result, inter_result)
-
-        # Trùng hoạt chất = cảnh báo vàng (dùng chung 1 hoạt chất 2 lần/ngày)
-        duplicate_warnings = [
-            "Hai thuốc %s cùng chứa hoạt chất %s [%s] — KHÔNG dùng chung trong cùng ngày nếu chưa hỏi dược sĩ."
-            % (", ".join(d["inputs"]), d["ingredient"], d["drug_code"])
-            for d in dup_result["duplicates"]
-        ]
-
-        # Trên biểu đồ 3 màu: RED khi tương tác nặng, UNKNOWN → YELLOW, nhắc kê đơn → RED
-        unknown = norm_result.get("unknown_meds", [])
-        risk = _risk_level(norm_result, inter_result, {**guard, "emergency": False})
-        if guard.get("prescribe_request"):
-            risk = "RED"
-
-        # escalate: ĐỎ luôn escalate; thuốc lạ escalate (C2); yêu cầu kê đơn escalate
-        escalate = (
-            risk == "RED"
-            or bool(unknown)
-            or bool(norm_result.get("fuzzy_matches"))
-            or guard.get("prescribe_request", False)
+def _build_pharmacist_summary(medications, norm_result, inter_result, dup_result, guard):
+    drugs_input = [str(m).strip() for m in (medications or []) if str(m).strip()]
+    med_str = ", ".join(drugs_input) if drugs_input else "(danh sách thuốc)"
+    if guard.get("emergency"):
+        return (
+            "KHẨN CẤP: Người nhà đang có dấu hiệu nguy hiểm (cần gọi 115 / đi khám ngay). "
+            "Thuốc ghi nhận: %s. Vui lòng mang theo toàn bộ vỏ hộp và đơn thuốc tới cơ sở y tế." % med_str
         )
 
-        # Tương tác list cho UI — theo JSON contract
-        interactions_ui = []
-        for p in inter_result.get("pairs_input", []):
-            sev = p["severity"]
-            interactions_ui.append({
-                "pair": p["pair_inputs"],
-                "severity": p["severity_color"],
-                "reason": p.get("summary") or "(chưa có mô tả trong dữ liệu)",
-                "action": p.get("recommendation") or "Hỏi dược sĩ trước khi dùng chung.",
-            })
-        for w in duplicate_warnings:
-            interactions_ui.append({
-                "pair": [], "severity": "YELLOW",
-                "reason": w, "action": "Chỉ giữ một thuốc chứa hoạt chất này mỗi ngày, hỏi dược sĩ.",
-            })
-        if unknown:
-            interactions_ui.append({
-                "pair": [], "severity": "YELLOW",
-                "reason": "Thuốc chưa có trong dữ liệu: %s — hệ thống không tự suy ra tương tác."
-                % ", ".join(unknown),
-                "action": "Hỏi dược sĩ hoặc gửi tên thuốc trên vỏ hộp để kiểm tra.",
-            })
-        if guard.get("prescribe_request"):
-            interactions_ui.append({
-                "pair": [], "severity": "RED",
-                "reason": "Yêu cầu kê đơn / thêm thuốc nằm ngoài phạm vi của trợ lý.",
-                "action": "Liên hệ bác sĩ hoặc dược sĩ trực tiếp.",
-            })
+    parts = ["Chào dược sĩ, mẹ/bố tôi đang dùng: %s." % med_str]
+    hard = [p for p in inter_result.get("pairs_input", []) if p["severity"] == "nang"]
+    yellow = [p for p in inter_result.get("pairs_input", []) if p["severity"] != "nang"]
+    if hard:
+        pairs_s = "; ".join("%s + %s" % (p["pair_inputs"][0], p["pair_inputs"][1]) for p in hard)
+        parts.append(
+            "Hệ thống cảnh báo tương tác mức ĐỎ giữa %s. "
+            "Xin hỏi có nên tạm ngưng hay điều chỉnh lịch uống/đơn thuốc không?" % pairs_s
+        )
+    elif yellow or dup_result.get("count"):
+        notes_y = []
+        for p in yellow:
+            notes_y.append("%s + %s" % (p["pair_inputs"][0], p["pair_inputs"][1]))
+        for d in dup_result.get("duplicates", []):
+            notes_y.append("trùng hoạt chất %s (%s)" % (d["ingredient"], " + ".join(d["inputs"])))
+        parts.append("Hệ thống lưu ý mức VÀNG: %s. Nhờ dược sĩ xác nhận lại lịch uống an toàn." % "; ".join(notes_y))
 
-        # Tóm tắt mặc định (mock CP2) — AI chỉ viết lại lời văn
-        risk_summary_default = _default_risk_summary(risk, norm_result, inter_result, dup_result, guard)
-        pharmacist_summary = _build_pharmacist_summary(medications, norm_result, inter_result, guard)
-
-        # trace theo JSON contract (mục 3.2)
-        trace_norm = [
-            {"input": e["input"], "ingredient": e.get("ingredient"), "matched": bool(e.get("matched"))}
-            for e in norm_result.get("normalized", [])
-        ]
-        tool_lookups = ["normalize_medications: %d tên → %d hoạt chất (nguồn: %s)"
-                        % (len(medications), len(norm_result.get("ingredients", [])), norm_result.get("source", ""))]
-        for p in inter_result.get("pairs_input", []):
-            tool_lookups.append(
-                "Tra bảng tương tác (%s): %s + %s → %s [%s]."
-                % (p.get("source", "data"), p["pair_ingredients"][0], p["pair_ingredients"][1],
-                   p["severity_color"], p["code"])
-            )
-        if dup_result["count"]:
-            tool_lookups.append("check_duplicates: %d hoạt chất bị dùng trùng qua 2 tên khác nhau." % dup_result["count"])
-        guardrail_decision = _guardrail_decision_text(risk, guard, unknown, sched["schedule_locked"])
-
-        # Bước model: chỉ viết lại risk_summary (giữ fallback mock khi chưa nối model / lỗi)
-        risk_summary = risk_summary_default
-        model_note = "mock (MODEL_PROVIDER=fake hoặc chưa cấu hình — CP2)"
-        try:
-            prompt = _model_prompt(norm_result, inter_result, dup_result, guard, risk, sched)
-            reply = call_model(SYSTEM_PROMPT, prompt)
-            if reply.get("model") and reply.get("model") != "fake" and reply.get("text", "").strip():
-                risk_summary = reply["text"].strip()
-                model_note = "model thật: %s (token %d/%d)" % (reply["model"], reply.get("tokens_in", 0), reply.get("tokens_out", 0))
-            else:
-                model_note = "mock: model trả lời giả (chưa nối model thật)"
-        except Exception as e:  # model lỗi/mất mạng: fallback sang text dựng sẵn — API không chết
-            model_note = "fallback (model lỗi: %s: %s)" % (type(e).__name__, str(e)[:120])
-        note("model: %s" % model_note)
-
-        result = {
-            "risk_level": risk,
-            "risk_summary": risk_summary,
-            "escalate_to_pharmacist": bool(escalate),
-            "interactions": interactions_ui,
-            "schedule_locked": bool(sched["schedule_locked"] or risk == "RED"),
-            "schedule": sched["schedule"],
-            "pharmacist_summary": pharmacist_summary,
-            "trace": {
-                "normalized_ingredients": trace_norm,
-                "tool_lookups": tool_lookups,
-                "guardrail_decision": guardrail_decision,
-                "model_note": model_note,
-                "separation_notes": sched["separation_notes"],
-            },
-        }
-        return result
-    finally:
-        _trace_end()
+    if norm_result.get("unknown_meds"):
+        parts.append("Có thuốc chưa có trong dữ liệu: %s — nhờ dược sĩ kiểm tra giúp." % ", ".join(norm_result["unknown_meds"]))
+    if guard.get("prescribe_request"):
+        parts.append("Gia đình muốn hỏi ý kiến trực tiếp bác sĩ/dược sĩ về việc kê thêm thuốc.")
+    if not hard and not yellow and not dup_result.get("count") and not norm_result.get("unknown_meds") and not guard.get("prescribe_request"):
+        parts.append("Hệ thống chưa ghi nhận tương tác trong bộ 18 hoạt chất; nhờ dược sĩ xem giúp nếu cần lưu ý thêm theo bệnh nền.")
+    return " ".join(parts)
 
 
 def _default_risk_summary(risk, norm_result, inter_result, dup_result, guard):
-    if guard.get("prescribe_request"):
-        return (
-            "Yêu cầu kê thêm thuốc nằm ngoài phạm vi của trợ lý (không chẩn đoán, không kê đơn). "
-            "Vui lòng liên hệ bác sĩ hoặc dược sĩ."
-        )
+    if guard.get("emergency"):
+        return "CẢNH BÁO CẤP CỨU: Phát hiện dấu hiệu nguy hiểm. Dừng tự sắp lịch và gọi 115 hoặc đưa người nhà đi khám ngay."
     pairs = inter_result.get("pairs_input", [])
-    red = [p for p in pairs if p["severity"] == "nang"]
-    if red:
-        parts = []
-        for p in red:
-            parts.append(
-                "%s và %s (nguy cơ: %s)" % (p["pair_inputs"][0], p["pair_inputs"][1], (p.get("summary") or "")[:80])
-            )
-        return "Phát hiện %d cặp tương tác mức ĐỎ: %s. Không tự ý dùng chung — cần bác sĩ/dược sĩ xác nhận lại đơn." % (
-            len(red), "; ".join(parts)
-        )
-    if norm_result.get("unknown_meds"):
+    hard = [p for p in pairs if p["severity"] == "nang"]
+    if hard:
+        pairs_s = ", ".join("%s + %s" % (p["pair_inputs"][0], p["pair_inputs"][1]) for p in hard)
+        return "Phát hiện tương tác nguy hiểm mức ĐỎ (%s). Không tự ý dùng chung; đã khóa lịch tự động và cần hỏi bác sĩ/dược sĩ ngay." % pairs_s
+    if guard.get("prescribe_request"):
+        return "Yêu cầu kê thêm thuốc / chẩn đoán nằm ngoài thẩm quyền của trợ lý. Vui lòng trao đổi trực tiếp với bác sĩ hoặc dược sĩ."
+    if norm_result.get("unknown_meds") and not norm_result.get("ingredients"):
         return (
-            "Không nhận diện được %d tên thuốc (%s). Hệ thống không tự đoán — vui lòng kiểm tra tên trên vỏ hộp "
-            "hoặc hỏi dược sĩ." % (len(norm_result["unknown_meds"]), ", ".join(norm_result["unknown_meds"]))
+            "Chưa nhận diện được %d thuốc trong dữ liệu (%s). Hệ thống không tự đoán — vui lòng kiểm tra tên trên vỏ hộp hoặc hỏi dược sĩ."
+            % (len(norm_result["unknown_meds"]), ", ".join(norm_result["unknown_meds"]))
         )
     yellow = [p for p in pairs if p["severity"] != "nang"]
-    if dup_result["count"]:
+    if dup_result.get("count") and yellow:
         d = dup_result["duplicates"][0]
-        return "Hai thuốc %s cùng chứa hoạt chất %s — không nên dùng chung trong cùng ngày nếu chưa hỏi dược sĩ." % (
+        p = yellow[0]
+        return (
+            "Cảnh báo mức VÀNG: phát hiện trùng hoạt chất %s (%s) và cặp cần tách giờ %s + %s. "
+            "Không uống gộp thuốc trùng hoạt chất và tuân thủ tách giờ theo lịch nháp."
+            % (d["ingredient"], " + ".join(d["inputs"]), p["pair_inputs"][0], p["pair_inputs"][1])
+        )
+    if dup_result.get("count"):
+        d = dup_result["duplicates"][0]
+        return "Cảnh báo mức VÀNG: %s đều chứa hoạt chất %s — không tự ý uống gộp cùng ngày và cần hỏi dược sĩ." % (
             " và ".join(d["inputs"]), d["ingredient"]
+        )
+    if norm_result.get("unknown_meds"):
+        return "Cảnh báo mức VÀNG: có %d thuốc chưa có trong dữ liệu (%s). Hệ thống không tự suy đoán tương tác — vui lòng hỏi dược sĩ." % (
+            len(norm_result["unknown_meds"]), ", ".join(norm_result["unknown_meds"])
         )
     if yellow:
         p = yellow[0]
-        return "Có cặp cần lưu ý: %s + %s — %s" % (
-            p["pair_inputs"][0], p["pair_inputs"][1], (p.get("summary") or "")[:100]
-        )
-    return "Chưa ghi nhận cặp tương tác nào trong danh mục dữ liệu hiện có. Lịch dưới đây vẫn là bản nháp cần xác nhận."
+        return "Cảnh báo mức VÀNG: %s + %s — %s" % (p["pair_inputs"][0], p["pair_inputs"][1], (p.get("summary") or "")[:140])
+    return "Chưa ghi nhận cặp tương tác hay trùng hoạt chất trong danh mục dữ liệu hiện có. Lịch dưới đây là bản nháp chờ người nhà xác nhận."
 
 
 def _guardrail_decision_text(risk, guard, unknown, locked):
     if guard.get("emergency"):
-        return "Guardrail cấp cứu: dừng mọi bước, chỉ dẫn gọi 115."
+        return "Kích hoạt Guardrail CẤP CỨU mức ĐỎ: khóa toàn bộ lịch uống và yêu cầu gọi 115 / đi khám ngay."
     decisions = []
     if risk == "RED":
-        decisions.append("Guardrail mức ĐỎ: khoá lịch tự động và bật chuyển dược sĩ.")
+        decisions.append("Kích hoạt Guardrail mức ĐỎ: khóa lịch tự động cho các thuốc nguy hiểm và bật nút Hỏi Dược Sĩ.")
     if unknown:
-        decisions.append(
-            "Guardrail thuốc lạ (%d): không xếp lịch cho thuốc chưa có trong dữ liệu, chuyển dược sĩ." % len(unknown)
-        )
+        decisions.append("Guardrail thuốc lạ (%d): không xếp lịch cho thuốc chưa có trong dữ liệu, chuyển dược sĩ." % len(unknown))
     if guard.get("prescribe_request"):
         decisions.append("Guardrail ngoài thẩm quyền: từ chối kê đơn.")
     if not decisions:
-        decisions.append("Không kích hoạt guardrail — ca an toàn, lịch nháp chờ người dùng xác nhận.")
+        if risk == "YELLOW":
+            decisions.append("Cảnh báo mức VÀNG: xếp lịch nháp có tách giờ / lưu ý trùng hoạt chất và khuyến nghị xác nhận dược sĩ.")
+        else:
+            decisions.append("Không kích hoạt guardrail chặn — ca an toàn, xuất lịch nháp chờ người dùng xác nhận.")
     text = " ".join(decisions)
-    if locked and "khoá" not in text:
-        text += " Lịch đã bị khoá."
+    if locked and "khóa" not in text and "khoá" not in text:
+        text += " Lịch đã bị khóa."
     return text
 
 
@@ -444,14 +318,143 @@ def _model_prompt(norm_result, inter_result, dup_result, guard, risk, sched):
 
 
 def json_short(obj):
-    import json as _json
-    s = _json.dumps(obj, ensure_ascii=False)
+    s = json.dumps(obj, ensure_ascii=False)
     return s if len(s) <= 800 else s[:800] + "…"
 
 
-# ---------------------------------------------------------------------------
-# Chạy độc lập (DoD Phần 2): python backend_agent.py — 4 ca mẫu + mock model
-# ---------------------------------------------------------------------------
+def analyze_medications(medications, notes="", trace_id="api"):
+    """Điểm vào chính của Phần 2 Backend cho tầng API (`POST /api/analyze`) — đúng JSON Contract §3.2."""
+    _trace_begin(trace_id)
+    try:
+        med_list = [str(m).strip() for m in (medications or []) if str(m).strip()]
+        notes_clean = (notes or "").strip()
+
+        guard = _detect_hard_guardrails(med_list, notes_clean)
+        norm_result = backend_tools.normalize_medications(med_list)
+        dup_result = backend_tools.check_duplicates(norm_result)
+        inter_result = backend_tools.lookup_interactions(norm_result)
+
+        unknown = norm_result.get("unknown_meds", [])
+        risk = _risk_level(norm_result, inter_result, dup_result, guard)
+
+        if guard.get("emergency"):
+            sched = {"schedule": {"morning": [], "noon": [], "evening": [], "bedtime": []}, "schedule_locked": True, "separation_notes": []}
+        else:
+            sched = _build_schedule_v2(norm_result, inter_result, dup_result)
+
+        schedule_locked = bool(sched["schedule_locked"] or risk == "RED")
+        hoi_ds_med = any(
+            p.get("severity") == "trung_binh" and p.get("action") == "hoi_duoc_si"
+            for p in inter_result.get("pairs_input", [])
+        )
+        combo_meds = norm_result.get("combination_meds", [])
+        escalate = bool(
+            risk == "RED"
+            or unknown
+            or dup_result.get("count", 0) > 0
+            or combo_meds
+            or hoi_ds_med
+            or guard.get("prescribe_request")
+        )
+
+        # Danh sách interactions đúng JSON Contract §3.2
+        interactions_ui = []
+        for p in inter_result.get("pairs_input", []):
+            interactions_ui.append({
+                "pair": p["pair_inputs"],
+                "severity": p["severity_color"],
+                "reason": p.get("summary") or "(chưa có mô tả trong dữ liệu)",
+                "action": p.get("recommendation") or "Hỏi dược sĩ trước khi dùng chung.",
+            })
+        for d in dup_result.get("duplicates", []):
+            interactions_ui.append({
+                "pair": d["inputs"][:2] if len(d["inputs"]) >= 2 else d["inputs"],
+                "severity": "YELLOW",
+                "reason": "Trùng hoạt chất %s: %s đều chứa cùng hoạt chất, dùng chung dễ quá liều."
+                % (d["ingredient"], " và ".join(d["inputs"])),
+                "action": "Chỉ giữ một thuốc chứa %s mỗi ngày và hỏi dược sĩ." % d["ingredient"],
+            })
+
+        risk_summary_default = _default_risk_summary(risk, norm_result, inter_result, dup_result, guard)
+        pharmacist_summary = _build_pharmacist_summary(med_list, norm_result, inter_result, dup_result, guard)
+
+        # Trace theo JSON Contract §3.2 (không để ingredient=None tránh crash UI)
+        trace_norm = [
+            {
+                "input": e["input"],
+                "ingredient": e.get("ingredient") or "Chưa có trong dữ liệu",
+                "matched": bool(e.get("matched")),
+            }
+            for e in norm_result.get("normalized", [])
+        ]
+        tool_lookups = [
+            "Chuẩn hóa danh mục (%s): %d tên → %d hoạt chất nhận diện."
+            % (norm_result.get("source", "data/drugs.json"), len(med_list), len(norm_result.get("ingredients", [])))
+        ]
+        if guard.get("emergency"):
+            tool_lookups.append("Sàng lọc cấp cứu: Phát hiện dấu hiệu nguy hiểm -> DỪNG và chỉ dẫn gọi 115.")
+        if guard.get("prescribe_request"):
+            tool_lookups.append("Kiểm tra thẩm quyền: Phát hiện yêu cầu kê đơn/thêm thuốc -> Từ chối.")
+        for p in inter_result.get("pairs_input", []):
+            tool_lookups.append(
+                "Tra cứu bảng tương tác (DATA_CARD %s): %s + %s -> Mức %s."
+                % (p["code"], p["pair_ingredients"][0], p["pair_ingredients"][1], p["severity_color"])
+            )
+        if dup_result.get("count"):
+            for d in dup_result["duplicates"]:
+                tool_lookups.append(
+                    "Kiểm tra trùng hoạt chất (check_duplicates): %s cùng chứa %s -> Mức YELLOW."
+                    % (" + ".join(d["inputs"]), d["ingredient"])
+                )
+        if unknown:
+            tool_lookups.append("Thuốc chưa có trong dữ liệu 18 hoạt chất xếp lịch (%d): %s." % (len(unknown), ", ".join(unknown)))
+        if combo_meds:
+            tool_lookups.append(
+                "Thuốc phối hợp nhiều hoạt chất (%d): %s — cần kiểm tra đủ các hoạt chất trên vỏ hộp với dược sĩ."
+                % (len(combo_meds), ", ".join(c["input"] for c in combo_meds))
+            )
+
+        guardrail_decision = _guardrail_decision_text(risk, guard, unknown, schedule_locked)
+
+        # Gọi model thật để viết lại risk_summary (không gọi khi cấp cứu để phản hồi tức thì & tiết kiệm quota)
+        risk_summary = risk_summary_default
+        model_note = "mock (MODEL_PROVIDER=fake hoặc chưa cấu hình)"
+        if not guard.get("emergency"):
+            try:
+                prompt = _model_prompt(norm_result, inter_result, dup_result, guard, risk, sched)
+                reply = call_model(SYSTEM_PROMPT, prompt)
+                if reply.get("model") and reply.get("model") != "fake" and reply.get("text", "").strip():
+                    risk_summary = reply["text"].strip()
+                    model_note = "model thật: %s (token %d/%d)" % (
+                        reply["model"], reply.get("tokens_in", 0), reply.get("tokens_out", 0)
+                    )
+                else:
+                    model_note = "mock: model trả lời giả (chưa nối model thật)"
+            except Exception as e:
+                model_note = "fallback (model lỗi: %s: %s)" % (type(e).__name__, str(e)[:120])
+        else:
+            model_note = "dừng sớm: guardrail cấp cứu (không gọi model)"
+        note("model: %s" % model_note)
+
+        return {
+            "risk_level": risk,
+            "risk_summary": risk_summary,
+            "escalate_to_pharmacist": escalate,
+            "interactions": interactions_ui,
+            "schedule_locked": schedule_locked,
+            "schedule": sched["schedule"],
+            "pharmacist_summary": pharmacist_summary,
+            "trace": {
+                "normalized_ingredients": trace_norm,
+                "tool_lookups": tool_lookups,
+                "guardrail_decision": guardrail_decision,
+                "model_note": model_note,
+            },
+        }
+    finally:
+        _trace_end()
+
+
 if __name__ == "__main__":
     for _stream in (sys.stdout, sys.stderr):
         try:
@@ -459,20 +462,19 @@ if __name__ == "__main__":
         except Exception:
             pass
 
-    import json as _json
     CASES = {
-        "safe": ["Amlodipine 5mg", "Metformin 500mg", "Atorvastatin 10mg", "Vitamin D3"],
-        "yellow": ["Levothyroxine 50mcg", "Canxi Carbonate 500mg", "Panadol 500mg", "Efferalgan 500mg"],
-        "red": ["Warfarin 5mg", "Aspirin 81mg", "Ibuprofen 400mg", "Omeprazole 20mg"],
-        "edge": ["Thuốc huyết áp viên màu hồng", "Thuốc đau đầu gói xanh", "Mẹ đang đau ngực, kê thêm thuốc giúp tôi"],
+        "safe": (["Amlodipine 5mg", "Metformin 500mg", "Atorvastatin 10mg", "Vitamin D3"], "Uống duy trì hàng ngày"),
+        "yellow": (["Levothyroxine 50mcg", "Canxi Carbonate 500mg", "Panadol 500mg", "Efferalgan 500mg"], "Mẹ hay uống chung buổi sáng"),
+        "red": (["Warfarin 5mg", "Aspirin 81mg", "Ibuprofen 400mg", "Omeprazole 20mg"], "Mới mua thêm thuốc giảm đau khớp"),
+        "edge": (["Thuốc huyết áp viên màu hồng", "Thuốc đau đầu gói xanh"], "Mẹ đang đau ngực, kê thêm thuốc giúp tôi"),
     }
-    for name, meds in CASES.items():
+    for name, (meds, n) in CASES.items():
         print("=" * 60)
         print("CA:", name)
-        r = analyze_medications(meds, notes="", trace_id="selftest-" + name)
+        r = analyze_medications(meds, notes=n, trace_id="selftest-" + name)
         print(" risk:", r["risk_level"], "| locked:", r["schedule_locked"], "| escalate:", r["escalate_to_pharmacist"])
-        print(" summary:", r["risk_summary"][:150])
+        print(" summary:", r["risk_summary"][:160])
         for slot, items in r["schedule"].items():
             if items:
                 print(" ", slot, "->", [(x["name"], x["timing"]) for x in items])
-        print(" trace.guardrail:", r["trace"]["guardrail_decision"][:120])
+        print(" trace.guardrail:", r["trace"]["guardrail_decision"][:140])

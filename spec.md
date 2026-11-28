@@ -122,18 +122,18 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không —
 
   Hai ngưỡng đi kèm (đo, báo cáo, nhưng **không** tính vào chuẩn đạt): (a) **không xếp lịch thừa** — ca không có cặp tương tác nào mà vẫn chuyển dược sĩ ≤ 20% (tránh chuyển mọi ca cho chắc, mất pain "tối muộn không ai hỏi"); (b) lịch nháp của ca `thuong` phải khớp khung giờ khuyến nghị từ `data/drugs.json` (uống trước/sau ăn) ≥ 80%.
 
-- Kết quả: lượt 1 **18/22 (82%)** · lượt 2 *(lỗi kỹ thuật — 12 câu dính rate-limit key free, không dùng làm lượt chính thức)* — run ID: `run-1@20261128-035454` → chi tiết `eval/report.md`, hồ sơ `eval/README.md`. Chưa đạt chuẩn §7 (82% < 85% + C1 trượt 3 câu B06/B08/B09) — cải tiến cho lượt 2 ở CP4.
+- Kết quả: lượt 1 **18/22 (82%)** · lượt 2 **20/22 (91%)** — run ID: `run-1@20261128-035454` / `run-4@20261128-112702` → chi tiết `eval/report.md`, hồ sơ `eval/README.md`. **Đạt chuẩn §7**: 91% ≥ 85% và C1–C3 đều 100% (cải tiến: khoá lịch cứng khi có cặp NẶNG + đủ 3 buổi + hậu kiểm output).
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
-- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` (__ phiên)
-- Chi phí / task thành công: __ (model __) · __ (model __)
-- Chi phí / tháng ở quy mô thật: thấp __ · cơ sở __ · cao __ → chi tiết `cost/cost-estimate.md`
-- So với impact / người / tháng (§2): đáng làm không, vì sao:
+- Persona + giá: `cost/personas.yaml` (dung_it 50%/2 phiên · dung_vua 30%/3 · dung_nhieu 20%/4 — nguồn P1 + tự ước tính) · lượt mô phỏng: `cost/simulate-1.csv` (50 phiên, seed 42, `--rate-from eval/run-4.csv`)
+- Chi phí / task thành công: **$0.00100 ≈ 26 ₫** (model gpt-5-nano) · **$0.0013 ≈ 34 ₫** (model claude-haiku-5-5) — đo token trên nemotron-3.5-lightning:free, tính giá 2 model trả phí theo bảng BTC 25/11/2026
+- Chi phí / tháng ở quy mô thật: thấp **$0.73 (≈ 18.888 ₫)** · cơ sở **$1.70 (≈ 44.072 ₫)** · cao **$2.42 (≈ 62.960 ₫)** (model nano) → chi tiết `cost/cost-estimate.md`
+- So với impact / người / tháng (§2): **đáng làm** — chi phí ~63 ₫/người/tháng so với tiết kiệm 45–80 phút công/tháng (P1) và giảm rủi ro tai biến tương tác; nút thắt là hạn mức key free, không phải chi phí model.
 
 ## §9. Rủi ro & an toàn
-- Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
-- AI **không được** làm gì kể cả khi người dùng yêu cầu:
-- Ai có thể bị hại nếu AI sai, và nhóm chặn thế nào:
+- Dữ liệu: **không thu bất kỳ dữ liệu sức khoẻ thật của ai** — câu thử, ca mẫu, đơn thuốc trong repo đều dựng (nhãn `synthetic`, `data/DATA_CARD.md`); phiếu dược sĩ chỉ tạo bản nháp trên máy người dùng, không tự gửi; không đưa dữ liệu cá nhân vào model gói miễn phí (input chỉ là tên thuốc + câu hỏi, không tên người/bệnh án).
+- AI **không được** làm gì kể cả khi người dùng yêu cầu: chẩn đoán bệnh, kê đơn, tư vấn liều mg/số viên, khuyên tự ý ngừng/đổi thuốc, bỏ hay hạ cảnh báo tương tác mức NẶNG, gợi ý thuốc thay thế thuốc kê đơn, xếp lịch cho ca có cặp tương tác mức NẶNG hoặc thuốc ngoài dữ liệu. Chặn cứng bằng code (`_detect_guardrail`, `_enforce_post_guardrail`), không phụ thuộc model.
+- Ai có thể bị hại nếu AI sai, và nhóm chặn thế nào: **người cao tuổi dùng thuốc** — bịa cặp tương tác hoặc tự dựng lịch khi có cặp nặng → uống nhầm. Chặn: (1) mọi tương tác tra từ data có nguồn (Dược thư QG VN, QĐ 5948 BYT), model chỉ diễn giải; (2) có cặp NẶNG → khoá lịch cứng + bắt buộc phiếu dược sĩ; (3) thuốc lạ → không xếp lịch, không suy đoán; (4) dấu hiệu cấp cứu → dừng luồng, chỉ 115; (5) lịch luôn nháp kèm nhắc đối chiếu đơn bác sĩ; (6) hậu kiểm output sau model (spec §7 C1–C3 chấm 20/22 câu lượt 4).
 
 ## §10. Phân công & changelog
 - Phân công có tên (theo chặng, chia cặp — guide "Cách chia việc"): chặng 1–2 (khám phá + thiết kế): Việt (canvas, spec §4/§7) + Nhật (bằng chứng đầu, benchmark 13 câu + 5 metric) + Thắng (data 18 thuốc, 12 cặp, DATA_CARD) + Dũng (codebase luồng, tools) · chặng 3 (build): Dũng (agent + tools) + Việt (nối model, guardrail, backend 3 phần, ghép frontend) + Nhật (frontend web) + Thắng (data v2 — 3.006 brand DAV, 633 cặp QĐ 5948)

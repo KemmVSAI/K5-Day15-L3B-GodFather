@@ -1,17 +1,19 @@
-"""Web server cho bản chạy thử Track B2 — GodFather.
+"""Web server cho bản chạy thử Track B2 — GodFather (thuần thư viện chuẩn Python).
 
 Chạy bằng: python run.py web   (hoặc: python codebase/web.py)
 
-- Chỉ dùng thư viện chuẩn của Python (http.server) — không thêm dependency, không phá CLI.
-- Frontend gọi 2 endpoint:
-    GET  /api/status   → {model, drugs_count, interactions_count, sources, demo_mode}
-    POST /api/check    → body {text} → gọi agent.answer() THẬT → {output, meta}
-- Frontend KHÔNG hardcode kết quả: mọi cảnh báo / lịch / mức độ đều từ meta do backend trả.
-- API key không bao giờ rời backend (đọc từ .env trong codebase/ai.py).
+Hỗ trợ đầy đủ CORS và tương thích với cả 2 chuẩn Frontend:
+    - GET  /api/status        → {model, model_name, demo_mode, sources, drugs_count, registered_brands_count, interactions_count, byt_interactions_count}
+    - GET  /api/health        → {status, data}
+    - GET  /api/presets       → 4 ca mẫu (JSON Contract 3.1)
+    - GET  /api/drugs/search  → gợi ý tên thuốc (autocomplete) theo ?q=...&limit=...
+    - POST /api/check         → body {text} → gọi agent.answer() THẬT → {output, meta, usage}
+    - POST /api/analyze       → body {medications, notes} → gọi backend_agent.analyze_medications() (JSON Contract 3.2)
 """
 import json
 import os
 import sys
+import urllib.parse
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -19,14 +21,18 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+CODEBASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(CODEBASE_DIR)
+for _p in (CODEBASE_DIR, ROOT_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("PORT", "8000"))
 
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+STATIC_DIR = os.path.join(CODEBASE_DIR, "web")
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -48,16 +54,21 @@ def _load_agent():
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "GodFatherB2/1.0"
+    server_version = "GodFatherB2/1.1"
     protocol_version = "HTTP/1.1"
 
-    # ---------- helpers ----------
+    def _cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         if isinstance(body, (dict, list)):
             body = json.dumps(body, ensure_ascii=False).encode("utf-8")
         elif isinstance(body, str):
             body = body.encode("utf-8")
         self.send_response(code)
+        self._cors_headers()
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -75,84 +86,139 @@ class Handler(BaseHTTPRequestHandler):
         with open(path, "rb") as f:
             body = f.read()
         self.send_response(200)
+        self._cors_headers()
         self.send_header("Content-Type", MIME.get(ext, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
-    # ---------- routes ----------
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors_headers()
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_GET(self):
-        path = self.path.split("?")[0]
-        if path == "/api/status":
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/api/health":
+            _load_agent()
+            from tools import data_status
+            self._send(200, {"status": "ok", "data": data_status()})
+        elif path == "/api/status":
             _load_agent()
             from tools import data_status
             ds = data_status()
-            n_drugs, n_int = _load_status_counts()
-            model_name = os.environ.get("MODEL_NAME", "")
-            if not model_name:
+            provider = (os.environ.get("MODEL_PROVIDER", "fake") or "fake").strip().lower()
+            model_name = (os.environ.get("MODEL_NAME", "") or "").strip()
+            if not model_name and provider == "openrouter":
                 try:
                     from ai import _OPENROUTER_FALLBACKS
                     model_name = (_OPENROUTER_FALLBACKS or [""])[0]
                 except Exception:
                     model_name = ""
             self._send(200, {
-                "model": os.environ.get("MODEL_PROVIDER", "fake"),
-                "model_name": model_name,
-                "demo_mode": (os.environ.get("MODEL_PROVIDER", "fake") or "fake").lower() in ("", "fake"),
+                "model": provider,
+                "model_name": model_name or ("fake" if provider == "fake" else ""),
+                "demo_mode": provider in ("", "fake"),
                 "sources": ds,
-                "drugs_count": n_drugs,
-                "interactions_count": n_int,
+                "drugs_count": ds["drugs_count"],
+                "registered_brands_count": ds["registered_brands_count"],
+                "interactions_count": ds["interactions_count"],
+                "byt_interactions_count": ds["byt_interactions_count"],
             })
         elif path == "/api/presets":
             self._send(200, {"presets": _PRESETS})
+        elif path == "/api/drugs/search":
+            _load_agent()
+            from tools import search_drugs
+            qs = urllib.parse.parse_qs(parsed.query)
+            q = (qs.get("q") or [""])[0]
+            try:
+                limit = int((qs.get("limit") or ["10"])[0])
+            except ValueError:
+                limit = 10
+            self._send(200, {"query": q, "results": search_drugs(q, limit=limit)})
         elif path in ("/", "/index.html"):
             self._static("/index.html")
         else:
             self._static(path)
 
-    def do_POST(self):
-        if self.path.split("?")[0] != "/api/check":
-            self._send(404, {"error": "not_found"})
-            return
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0 or length > 200_000:
+            return None, (400, {"error": "bad_request", "message": "Dữ liệu gửi lên không hợp lệ hoặc quá lớn."})
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            if length <= 0 or length > 200_000:
-                self._send(400, {"error": "bad_request", "message": "Dữ liệu gửi lên không hợp lệ hoặc quá lớn."})
+            raw = self.rfile.read(length).decode("utf-8", "replace")
+            payload = json.loads(raw)
+        except UnicodeDecodeError:
+            return None, (400, {"error": "bad_request", "message": "Dữ liệu gửi lên phải là UTF-8."})
+        except json.JSONDecodeError:
+            return None, (400, {"error": "bad_request", "message": "Không đọc được dữ liệu gửi lên."})
+        if not isinstance(payload, dict):
+            return None, (400, {"error": "bad_request", "message": "Body JSON phải là một object."})
+        return payload, None
+
+    def do_POST(self):
+        path = self.path.split("?")[0]
+        if path == "/api/check":
+            payload, err = self._read_json_body()
+            if err:
+                self._send(err[0], err[1])
                 return
-            try:
-                payload = json.loads(self.rfile.read(length).decode("utf-8", "replace"))
-            except UnicodeDecodeError:
-                self._send(400, {"error": "bad_request", "message": "Dữ liệu gửi lên phải là UTF-8."})
-                return
-            text = (payload.get("text") or "").strip() if isinstance(payload, dict) else ""
+            text = (payload.get("text") or "").strip()
             if not text:
                 self._send(400, {"error": "bad_request", "message": "Vui lòng nhập danh sách thuốc trước khi kiểm tra."})
                 return
+            try:
+                agent = _load_agent()
+                tracing = __import__("tracing")
+                tracing.begin("web")
+                result = agent.answer(text)
+                summary, _events = tracing.end()
+                if not isinstance(result, dict) or "output" not in result:
+                    raise ValueError("Agent trả kết quả không đúng hợp đồng")
+                self._send(200, {
+                    "output": result.get("output", ""),
+                    "meta": result.get("meta") or {},
+                    "usage": summary,
+                })
+            except NotImplementedError as e:
+                self._send(503, {"error": "model_not_connected", "message": "Chưa nối model AI: %s" % e})
+            except Exception as e:
+                self._send(500, {"error": "internal", "message": "Lỗi xử lý phía server: %s: %s" % (type(e).__name__, e)})
+            return
 
-            agent = _load_agent()
-            tracing = __import__("tracing")
-            tracing.begin("web")
-            result = agent.answer(text)
-            summary, _events = tracing.end()
-            if not isinstance(result, dict) or "output" not in result:
-                raise ValueError("Agent trả kết quả không đúng hợp đồng")
+        if path == "/api/analyze":
+            payload, err = self._read_json_body()
+            if err:
+                self._send(err[0], err[1])
+                return
+            meds_raw = payload.get("medications") or []
+            if isinstance(meds_raw, str):
+                meds = [p.strip() for p in meds_raw.replace("\n", ",").split(",") if p.strip()]
+            else:
+                meds = [str(m).strip() for m in meds_raw if str(m).strip()]
+            notes = str(payload.get("notes") or "").strip()
+            if not meds and not notes:
+                self._send(400, {"error": "EMPTY_INPUT", "message": "Danh sách thuốc trống — vui lòng nhập tên thuốc trên vỏ hộp."})
+                return
+            if len(meds) > 30:
+                self._send(400, {"error": "TOO_MANY_MEDS", "message": "Tối đa 30 thuốc mỗi lần kiểm tra."})
+                return
+            try:
+                import backend_agent
+                res = backend_agent.analyze_medications(meds, notes=notes, trace_id="web-api-" + os.urandom(3).hex())
+                self._send(200, res)
+            except Exception as e:
+                self._send(500, {"error": "ANALYZE_FAILED", "message": "%s: %s" % (type(e).__name__, str(e)[:300])})
+            return
 
-            self._send(200, {
-                "output": result.get("output", ""),
-                "meta": result.get("meta") or {},
-                "usage": summary,
-            })
-        except json.JSONDecodeError:
-            self._send(400, {"error": "bad_request", "message": "Không đọc được dữ liệu gửi lên."})
-        except NotImplementedError as e:
-            self._send(503, {"error": "model_not_connected", "message": "Chưa nối model AI: %s" % e})
-        except Exception as e:
-            self._send(500, {"error": "internal", "message": "Lỗi xử lý phía server: %s: %s" % (type(e).__name__, e)})
+        self._send(404, {"error": "not_found"})
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[web] %s - %s\n" % (self.address_string(), fmt % args))
-
 
 
 _PRESETS = [
@@ -185,22 +251,6 @@ _PRESETS = [
         "input_text": "Mẹ tôi 72 tuổi, đang uống thuốc huyết áp với thuốc tiểu đường, gần đây hay đau bụng trên. Xếp lịch giùm.",
     },
 ]
-
-def _load_status_counts():
-    import json as _json
-    drugs_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "drugs.json")
-    inter_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "interactions.json")
-    try:
-        with open(drugs_path, encoding="utf-8-sig") as f:
-            n_drugs = len(_json.load(f).get("drugs", []))
-    except Exception:
-        n_drugs = 0
-    try:
-        with open(inter_path, encoding="utf-8-sig") as f:
-            n_int = len(_json.load(f).get("interactions", []))
-    except Exception:
-        n_int = 0
-    return (n_drugs, n_int)
 
 
 def main():

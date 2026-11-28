@@ -391,25 +391,36 @@ function renderDetailTextOnly(output) {
 
 function renderResult(meta, output, usage) {
   el.result.hidden = false;
-  renderSummary(meta);
-  renderInteractions(meta);
-
-  if (meta.outcome === "need_input") {
+  if (!meta.outcome || meta.outcome === "need_input") {
+    // Backend trả "hỏi lại" hoặc meta tối giản — chỉ hiện chi tiết, không render summary rỗng
+    renderSummarySafe(meta);
+    el.interactionsPanel.hidden = true;
     el.schedulePanel.hidden = true;
     el.nextPanel.hidden = true;
   } else if (meta.outcome === "out_of_scope") {
+    renderSummarySafe(meta);
+    el.interactionsPanel.hidden = true;
     el.schedulePanel.hidden = true;
-    renderNextStep(meta);
+    renderNextStepSafe(meta);
   } else if (meta.outcome === "emergency") {
+    renderSummarySafe(meta);
+    el.interactionsPanel.hidden = true;
     el.schedulePanel.hidden = true;
     el.nextPanel.hidden = true;
   } else {
+    renderSummarySafe(meta);
+    renderInteractions(meta);
     renderSchedule(meta);
-    renderNextStep(meta);
-    renderDetail(output, usage);
-    return;
+    renderNextStepSafe(meta);
   }
   renderDetail(output, usage);
+}
+
+function renderSummarySafe(meta) {
+  try { renderSummary(meta); } catch (e) { el.riskSummary.innerHTML = ""; }
+}
+function renderNextStepSafe(meta) {
+  try { renderNextStep(meta); } catch (e) { el.nextContent.innerHTML = ""; el.nextPanel.hidden = true; }
 }
 
 function renderDetail(output, usage) {
