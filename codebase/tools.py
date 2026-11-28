@@ -4,9 +4,9 @@ Mỗi công cụ là một hàm Python có @tool với docstring đủ 4 ý theo
     Tên · Input · Output · Tác động ra ngoài.
 
 Nguồn dữ liệu:
-    Ưu tiên đọc trực tiếp từ `data/drugs.json` và `data/interactions.json` (schema v1.0 do nhóm chốt).
-    Nếu hai file chưa được merge vào nhánh hiện tại, tự động dùng bản dữ liệu mock dự phòng cùng schema
-    và ghi rõ nguồn dữ liệu (`mock_fallback`) để không giả làm thật.
+    Ưu tiên đọc trực tiếp từ `data/drugs.json` (hỗ trợ cả v1 và v2 có `registered_brands`)
+    và `data/interactions.json`. Nếu file chưa có, tự động dùng bản dữ liệu mock dự phòng
+    cùng schema và ghi rõ nguồn (`mock_fallback`) để không giả làm thật.
 """
 import datetime
 import difflib
@@ -23,6 +23,12 @@ DRUGS_PATH = os.path.join(ROOT, "data", "drugs.json")
 INTERACTIONS_PATH = os.path.join(ROOT, "data", "interactions.json")
 
 SEVERITY_ORDER = {"nang": 3, "trung_binh": 2, "nhe": 1, "khong": 0}
+SEVERITY_TO_LEVEL = {
+    "nang": "RED",
+    "trung_binh": "YELLOW",
+    "nhe": "GREEN",
+    "khong": "GREEN",
+}
 MEAL_LABELS = {
     "truoc_an": "Trước ăn",
     "sau_an": "Sau ăn",
@@ -30,8 +36,43 @@ MEAL_LABELS = {
 }
 MEAL_SORT = {"truoc_an": 0, "bat_ky": 1, "sau_an": 2}
 
-# Dữ liệu mock dự phòng cùng schema v1.0 với data/drugs.json & data/interactions.json
-# (chỉ kích hoạt khi nhánh hiện tại chưa có file trong data/)
+# Bổ sung từ đồng nghĩa phổ biến trên vỏ hộp tại VN khớp 18 hoạt chất chuẩn trong data/drugs.json
+_EXTRA_ALIASES = {
+    "DRUG-11": ["Acetylsalicylic acid", "Acid acetylsalicylic", "ASA"],
+    "DRUG-16": [
+        "Vitamin D3",
+        "Canxi Carbonate",
+        "Calci Carbonate",
+        "Calcium Carbonate",
+        "Cholecalciferol",
+    ],
+    "DRUG-18": ["Acetaminophen"],
+}
+
+# Các gốc muối dược dụng phổ biến kèm theo tên hoạt chất (vd "Losartan potassium", "Metformin HCl")
+_DRUG_SALT_WORDS = {
+    "potassium", "sodium", "natri", "kali", "hydrochloride", "hydroclorid",
+    "hcl", "fumarate", "fumarat", "besylate", "besylat", "carbonate",
+    "carbonat", "calcium", "maleate", "tartrate", "succinate", "mesylate",
+}
+
+# Trích dẫn nguồn công khai theo mã INT-xx trong data/DATA_CARD.md
+_INTERACTION_CITATIONS = {
+    "INT-01": "Dược thư Quốc gia VN (tương tác Warfarin) · Drugs.com Interaction (Major)",
+    "INT-02": "Dược thư Quốc gia VN (chống đông + NSAID) · Drugs.com Interaction (Major)",
+    "INT-03": "Dược thư Quốc gia VN (Warfarin + Paracetamol) · Drugs.com (Moderate)",
+    "INT-04": "Cảnh báo CYP2C19 (FDA / Cục QLD VN · Tờ HDSD Plavix) · Drugs.com (Major)",
+    "INT-05": "Dược thư Quốc gia VN (Aspirin + Ibuprofen) · Drugs.com (Major)",
+    "INT-06": "Dược thư Quốc gia VN (ACEi + lợi tiểu giữ kali) · Drugs.com (Major)",
+    "INT-07": "Dược thư Quốc gia VN (ACEi + NSAID) · Drugs.com (Moderate)",
+    "INT-08": "Dược thư Quốc gia VN (ARB + NSAID) · Drugs.com (Moderate)",
+    "INT-09": "Tờ HDSD Levothyrox (cách Canxi ≥ 4 giờ) · Drugs.com (Moderate)",
+    "INT-10": "Dược thư Quốc gia VN / Tờ HDSD Levothyrox (PPI giảm hấp thu) · Drugs.com (Moderate)",
+    "INT-11": "Khuyến cáo an toàn thuốc Cục QLD VN / FDA (Simvastatin + Amlodipine) · Drugs.com (Moderate)",
+    "INT-12": "Dược thư Quốc gia VN (Metformin + Furosemid) · Drugs.com (Minor/Moderate)",
+}
+
+# Dữ liệu mock dự phòng cùng schema với data/drugs.json & data/interactions.json
 _FALLBACK_DRUGS = [
     {
         "code": "DRUG-01",
@@ -364,7 +405,7 @@ _RED_FLAG_PATTERNS = [
 
 _NEGATIONS = ("khong bi ", "khong co ", "chua bi ", "khong thay ", "khong ")
 
-# Từ tiếng Việt thông thường để tránh nhận nhầm câu hội thoại thành tên thuốc lạ
+# Từ tiếng Việt thông thường & mô tả màu sắc/hình dạng viên thuốc (tránh nhận nhầm câu hội thoại thành tên thuốc lạ)
 _VI_COMMON_WORDS = {
     "toi", "minh", "em", "anh", "chi", "me", "bo", "ba", "ong", "co", "chu", "bac",
     "nha", "nguoi", "gia", "cao", "tuoi", "dang", "dung", "uong", "xep", "lich",
@@ -385,6 +426,13 @@ _VI_COMMON_WORDS = {
     "cu", "van", "de", "con", "sap", "soan", "xem", "lai", "nay", "kia", "do",
     "nay", "day", "gi", "ai", "dau", "bao", "lau", "de", "chi", "tiet", "them",
     "chong", "dong", "loi", "nhieu", "khac", "rieng", "het", "chua", "roi", "di",
+    "gium", "hang", "ngay", "tuan", "theo", "tri", "gut", "ngoai", "tai", "sao",
+    "may", "noi", "luon", "nho", "giong", "ngan", "gon", "thoi", "chuyen", "biet",
+    "mg", "mcg", "ml", "iu", "ui", "thuong", "chac", "luu", "nhanh", "gap",
+    "chuan", "toa", "day", "du", "benh", "nhan", "dieu", "chot", "cam",
+    # Mô tả hình dạng / màu sắc mơ hồ (B22 — phải hỏi lại theo G10, không đoán là tên thuốc)
+    "tron", "dai", "vuong", "nho", "to", "lon", "trang", "xanh", "duong", "do",
+    "vang", "hong", "tim", "nau", "den", "goi", "vi", "lo", "hop", "nang", "nen",
 }
 
 _UNKNOWN_MED_PREFIXES = (
@@ -396,6 +444,7 @@ _UNKNOWN_GENERIC_PHRASES = {
     "thuoc tim mach", "thuoc mo mau", "thuoc da day", "thuoc giam dau", "thuoc uong",
     "thuoc bo", "thuoc cua me", "thuoc cho me", "thuoc me dang uong", "thuoc hang ngay",
     "thuoc man tinh", "thuoc ke don", "thuoc khong ke don", "vien thuoc",
+    "thuoc tri gut", "thuoc dau dau", "thuoc ho",
 }
 
 
@@ -427,6 +476,30 @@ def _load_interactions() -> tuple:
             payload = json.load(f)
         return payload.get("interactions", []), "data/interactions.json"
     return list(_FALLBACK_INTERACTIONS), "mock_fallback(interactions.json)"
+
+
+def _build_alias_entries(drugs: list, include_registered_brands: bool = True) -> list:
+    """Xây bảng ánh xạ alias/biệt dược đã chuẩn hóa -> drug (ưu tiên tên dài hơn khớp trước)."""
+    alias_entries = []
+    seen_global = {}
+    for d in drugs:
+        extra = _EXTRA_ALIASES.get(d.get("code", ""), [])
+        terms = list(d.get("aliases") or []) + list(extra) + [d.get("generic_name", "")]
+        if include_registered_brands:
+            # Thêm biệt dược đăng ký DAV từ data/drugs.json v2 (lọc tên quá ngắn <=3 ký tự để tránh khớp nhầm từ tiếng Việt)
+            for b in d.get("registered_brands") or []:
+                nb = _norm(b)
+                if nb and len(nb) >= 4 and nb not in _VI_COMMON_WORDS:
+                    terms.append(b)
+        seen_t = set()
+        for t in terms:
+            nt = _norm(t)
+            if nt and nt not in seen_t and nt not in seen_global:
+                seen_t.add(nt)
+                seen_global[nt] = d["code"]
+                alias_entries.append((nt, t, d))
+    alias_entries.sort(key=lambda x: len(x[0]), reverse=True)
+    return alias_entries
 
 
 def data_status() -> dict:
@@ -487,65 +560,188 @@ def _looks_like_unknown_drug(raw_segment: str, norm_segment: str) -> bool:
             if rest.startswith(p):
                 rest = rest[len(p):].strip()
                 break
-        if rest and rest not in _VI_COMMON_WORDS and norm_segment not in _UNKNOWN_GENERIC_PHRASES:
+        rest_tokens = [t for t in _strip_dosage(rest).split() if not t.isdigit() and t not in _DRUG_SALT_WORDS]
+        if rest_tokens and any(t not in _VI_COMMON_WORDS for t in rest_tokens) and norm_segment not in _UNKNOWN_GENERIC_PHRASES:
             return True
     # Cụm có đơn vị hàm lượng như "Xarelto 15mg", "Amoxicillin 500mg"
     if re.search(r"[a-z]{3,}\s*\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|ui|iu)\b", norm_segment):
-        return True
-    tokens = [t for t in _strip_dosage(norm_segment).split() if not t.isdigit()]
+        tok_before = re.findall(r"([a-z]{3,})\s*\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|ui|iu)\b", norm_segment)
+        if any(t not in _VI_COMMON_WORDS and t not in _DRUG_SALT_WORDS for t in tok_before):
+            return True
+    tokens = [t for t in _strip_dosage(norm_segment).split() if not t.isdigit() and t not in _DRUG_SALT_WORDS]
     if not tokens:
         return False
     non_common = [t for t in tokens if t not in _VI_COMMON_WORDS and len(t) >= 4]
-    # Nếu là tên đơn/cặp ngắn gồm từ giống tên thuốc Latin/nước ngoài (không nằm trong từ điển Việt thông dụng)
     if len(tokens) <= 3 and len(non_common) >= 1:
-        # Tránh câu mô tả bệnh hoặc hội thoại dài
-        if any(re.search(r"[fwzj]|ph|th|ch|pr|tr|cl|fl|statin|pril|sartan|olol|mycin|cillin|prazole|xaban|gliptin|formin", t) for t in non_common):
+        if any(
+            re.search(
+                r"[fwzj]|ph|th|ch|pr|tr|cl|fl|statin|pril|sartan|olol|mycin|cillin|prazole|xaban|gliptin|formin|purinol|fed",
+                t,
+            )
+            for t in non_common
+        ):
             return True
         if len(tokens) == 1 and len(non_common[0]) >= 5:
             return True
     return False
 
 
+def _match_single_medication(raw_item: str, alias_entries: list, core_alias_norms: list, alias_to_drug: dict) -> dict:
+    """Chuẩn hóa MỘT tên thuốc cụ thể (dùng khi input là list[str])."""
+    cleaned = str(raw_item or "").strip()
+    norm_item = _norm(cleaned)
+    if not norm_item:
+        return {
+            "input": cleaned, "ingredient": None, "code": None,
+            "matched": False, "match_type": "empty", "drug": None,
+        }
+
+    padded = " " + norm_item + " "
+    for nt, orig_alias, drug in alias_entries:
+        pattern = r"(?<!\w)" + re.escape(nt) + r"(?!\w)"
+        if re.search(pattern, padded):
+            return {
+                "input": cleaned, "ingredient": drug["generic_name"], "code": drug["code"],
+                "matched": True, "match_type": "exact", "matched_alias": orig_alias, "drug": dict(drug),
+            }
+
+    cand_no_dose = _strip_dosage(norm_item)
+    tokens = [t for t in cand_no_dose.split() if len(t) >= 5 and t not in _VI_COMMON_WORDS and t not in _DRUG_SALT_WORDS]
+    candidates = ([cand_no_dose] if 5 <= len(cand_no_dose) <= 24 and len(cand_no_dose.split()) <= 2 else []) + tokens
+    for tok in candidates:
+        if tok in _VI_COMMON_WORDS:
+            continue
+        close = difflib.get_close_matches(tok, core_alias_norms, n=1, cutoff=0.78)
+        if close:
+            drug = alias_to_drug[close[0]]
+            return {
+                "input": cleaned, "ingredient": drug["generic_name"], "code": drug["code"],
+                "matched": True, "match_type": "fuzzy", "matched_alias": tok, "drug": dict(drug),
+            }
+
+    return {
+        "input": cleaned, "ingredient": None, "code": None,
+        "matched": False, "match_type": "unknown", "matched_alias": None, "drug": None,
+    }
+
+
+@tool
+def normalize_medications(med_list) -> dict:
+    """normalize_medications · Input: danh sách tên thuốc người dùng gõ (list[str] hoặc câu văn bản str) · Output: dict {source, normalized, found, fuzzy_matches, unknown_meds} chuẩn hóa tên thương mại sang hoạt chất và gắn cờ thuốc mơ hồ/chưa có trong dữ liệu · Tác động ra ngoài: Không (chỉ đọc data/drugs.json)."""
+    if isinstance(med_list, str):
+        res = lookup_drug_info(med_list)
+        return {
+            "source": res["source"],
+            "normalized": res["normalized"],
+            "found": res["found"],
+            "fuzzy_matches": res["fuzzy_matches"],
+            "unknown_meds": list(res["unknown"]),
+        }
+
+    drugs, source = _load_drugs()
+    alias_entries = _build_alias_entries(drugs, include_registered_brands=True)
+    core_entries = _build_alias_entries(drugs, include_registered_brands=False)
+    core_alias_norms = [nt for nt, _, _ in core_entries]
+    alias_to_drug = {nt: d for nt, _, d in core_entries}
+
+    normalized = []
+    found_by_code = {}
+    fuzzy_matches = []
+    unknown_meds = []
+
+    for raw_item in med_list or []:
+        text_item = str(raw_item or "").strip()
+        if not text_item:
+            continue
+        rec = _match_single_medication(text_item, alias_entries, core_alias_norms, alias_to_drug)
+        normalized.append({
+            "input": rec["input"],
+            "ingredient": rec["ingredient"],
+            "code": rec["code"],
+            "matched": rec["matched"],
+            "match_type": rec["match_type"],
+        })
+        if rec["matched"] and rec["drug"]:
+            code = rec["code"]
+            if code not in found_by_code:
+                entry = dict(rec["drug"])
+                entry["matched_term"] = rec["input"]
+                entry["match_type"] = rec["match_type"]
+                entry["input_names"] = [rec["input"]]
+                found_by_code[code] = entry
+            else:
+                if rec["input"] not in found_by_code[code]["input_names"]:
+                    found_by_code[code]["input_names"].append(rec["input"])
+            if rec["match_type"] == "fuzzy":
+                fuzzy_matches.append({
+                    "input": rec["input"],
+                    "matched_generic": rec["ingredient"],
+                    "code": code,
+                })
+        else:
+            if text_item not in unknown_meds:
+                unknown_meds.append(text_item)
+
+    found = sorted(found_by_code.values(), key=lambda d: d["code"])
+    return {
+        "source": source,
+        "normalized": normalized,
+        "found": found,
+        "fuzzy_matches": fuzzy_matches,
+        "unknown_meds": unknown_meds,
+    }
+
+
 @tool
 def lookup_drug_info(query: str) -> dict:
-    """lookup_drug_info · Input: tên thuốc hoặc câu chứa danh sách thuốc (str) · Output: dict {source, found, fuzzy_matches, unknown} với mã DRUG-xx, hoạt chất, khung giờ, bữa ăn, lưu ý · Tác động ra ngoài: Không (chỉ đọc danh mục thuốc)."""
+    """lookup_drug_info · Input: tên thuốc hoặc câu chứa danh sách thuốc (str) · Output: dict {source, found, normalized, fuzzy_matches, unknown} với mã DRUG-xx, hoạt chất, khung giờ, bữa ăn, lưu ý · Tác động ra ngoài: Không (chỉ đọc danh mục thuốc)."""
     drugs, source = _load_drugs()
     norm_full = _norm(query)
-
-    # Xây bảng ánh xạ alias đã chuẩn hóa -> drug (ưu tiên alias dài hơn khớp trước)
-    alias_entries = []
-    for d in drugs:
-        terms = list(d.get("aliases") or []) + [d.get("generic_name", "")]
-        seen_t = set()
-        for t in terms:
-            nt = _norm(t)
-            if nt and nt not in seen_t:
-                seen_t.add(nt)
-                alias_entries.append((nt, t, d))
-    alias_entries.sort(key=lambda x: len(x[0]), reverse=True)
+    # Khớp ưu tiên aliases cốt lõi trước, sau đó mới xét registered_brands (v2) để không chạy quá chậm trên 3000 brand
+    core_entries = _build_alias_entries(drugs, include_registered_brands=False)
 
     found_by_code = {}
+    normalized = []
     matched_spans = []
 
-    # Bước 1: Khớp chính xác alias / hoạt chất trong toàn văn bản
+    # Bước 1a: Khớp chính xác alias cốt lõi / hoạt chất trong toàn văn bản
     masked_text = " " + norm_full + " "
-    for nt, orig_alias, drug in alias_entries:
+    for nt, orig_alias, drug in core_entries:
         pattern = r"(?<!\w)" + re.escape(nt) + r"(?!\w)"
         if re.search(pattern, masked_text):
             code = drug["code"]
+            normalized.append({
+                "input": orig_alias,
+                "ingredient": drug["generic_name"],
+                "code": code,
+                "matched": True,
+                "match_type": "exact",
+            })
             if code not in found_by_code:
                 item = dict(drug)
                 item["matched_term"] = orig_alias
                 item["match_type"] = "exact"
+                item["input_names"] = [orig_alias]
                 found_by_code[code] = item
+            else:
+                if orig_alias not in found_by_code[code]["input_names"]:
+                    found_by_code[code]["input_names"].append(orig_alias)
             matched_spans.append(nt)
             masked_text = re.sub(pattern, " ", masked_text)
 
-    # Bước 2: Tách các cụm trong phần văn bản còn lại để bắt lỗi chính tả (fuzzy) và thuốc ngoài dữ liệu
+    # Bước 1b: Xây bảng tra cứu nhanh registered_brands (nếu data/drugs.json v2 có) bằng dict O(1)
+    brand_map = {}
+    for d in drugs:
+        for b in d.get("registered_brands") or []:
+            nb = _norm(b)
+            if nb and len(nb) >= 5 and nb not in _VI_COMMON_WORDS:
+                brand_map.setdefault(nb, (b, d))
+
+    # Bước 2: Tách các cụm trong phần văn bản còn lại để bắt registered_brands, fuzzy và thuốc ngoài dữ liệu
     fuzzy_matches = []
     unknown = []
-    all_alias_norms = [nt for nt, _, _ in alias_entries]
-    alias_to_drug = {nt: d for nt, _, d in alias_entries}
+    core_alias_norms = [nt for nt, _, _ in core_entries]
+    alias_to_drug = {nt: d for nt, _, d in core_entries}
 
     raw_segments = re.split(r"[,;\n+/]|(?:\s+(?:và|với|cùng|kèm)\s+)", query, flags=re.IGNORECASE)
     for seg in raw_segments:
@@ -555,34 +751,69 @@ def lookup_drug_info(query: str) -> dict:
         norm_seg = _norm(raw_clean)
         if not norm_seg:
             continue
-        # Bỏ qua nếu cụm này đã chứa thuốc khớp chính xác ở Bước 1
         already_matched = False
         for sp in matched_spans:
             if re.search(r"(?<!\w)" + re.escape(sp) + r"(?!\w)", norm_seg):
                 already_matched = True
-                # Nếu trong cụm còn từ lạ kèm theo (vd "mẹ uống Metformin và Xarelto" chưa tách hết) thì bỏ phần đã khớp
                 norm_seg = re.sub(r"(?<!\w)" + re.escape(sp) + r"(?!\w)", " ", norm_seg)
                 norm_seg = re.sub(r"\s+", " ", norm_seg).strip()
         if not norm_seg:
             continue
 
-        # Kiểm tra fuzzy từng từ đơn dài >= 5 ký tự hoặc cả cụm ngắn (để bắt lỗi chính tả như metfomin, warfarrin, amlodpin)
         cand_no_dose = _strip_dosage(norm_seg)
-        tokens = [t for t in cand_no_dose.split() if len(t) >= 5 and t not in _VI_COMMON_WORDS]
+        tokens = [
+            t for t in cand_no_dose.split()
+            if len(t) >= 5 and t not in _VI_COMMON_WORDS and t not in _DRUG_SALT_WORDS
+        ]
+
+        # Kiểm tra khớp nhanh registered_brands v2 (O(1) lookup)
+        brand_hit = False
+        for cand in ([cand_no_dose] if cand_no_dose else []) + tokens:
+            if cand in brand_map:
+                orig_b, drug = brand_map[cand]
+                code = drug["code"]
+                normalized.append({
+                    "input": orig_b, "ingredient": drug["generic_name"],
+                    "code": code, "matched": True, "match_type": "exact",
+                })
+                if code not in found_by_code:
+                    item = dict(drug)
+                    item["matched_term"] = orig_b
+                    item["match_type"] = "exact"
+                    item["input_names"] = [orig_b]
+                    found_by_code[code] = item
+                brand_hit = True
+                break
+        if brand_hit:
+            continue
+
+        # Kiểm tra fuzzy trên từ đơn >= 5 ký tự hoặc cụm ngắn (vd zococ -> Zocor, lostartan -> Losartan)
         fuzzy_hit = False
-        for tok in ([cand_no_dose] if 5 <= len(cand_no_dose) <= 22 and len(cand_no_dose.split()) <= 2 else []) + tokens:
-            if tok in _VI_COMMON_WORDS or tok in matched_spans:
+        fuzzy_cands = ([cand_no_dose] if 5 <= len(cand_no_dose) <= 22 and len(cand_no_dose.split()) <= 2 else []) + tokens
+        for tok in fuzzy_cands:
+            if tok in _VI_COMMON_WORDS or tok in _DRUG_SALT_WORDS or tok in matched_spans:
                 continue
-            close = difflib.get_close_matches(tok, all_alias_norms, n=1, cutoff=0.78)
+            close = difflib.get_close_matches(tok, core_alias_norms, n=1, cutoff=0.78)
             if close:
                 best_alias = close[0]
                 drug = alias_to_drug[best_alias]
                 code = drug["code"]
+                normalized.append({
+                    "input": tok,
+                    "ingredient": drug["generic_name"],
+                    "code": code,
+                    "matched": True,
+                    "match_type": "fuzzy",
+                })
                 if code not in found_by_code:
                     item = dict(drug)
                     item["matched_term"] = tok
                     item["match_type"] = "fuzzy"
+                    item["input_names"] = [tok]
                     found_by_code[code] = item
+                else:
+                    if tok not in found_by_code[code]["input_names"]:
+                        found_by_code[code]["input_names"].append(tok)
                 fuzzy_matches.append({
                     "input": tok,
                     "matched_generic": drug["generic_name"],
@@ -594,8 +825,7 @@ def lookup_drug_info(query: str) -> dict:
         if fuzzy_hit or already_matched:
             continue
 
-        # Nếu không khớp exact và không khớp fuzzy, kiểm tra xem có phải thuốc ngoài danh mục không
-        # Loại bỏ các từ dẫn chuyện phổ biến ở đầu cụm (vd "mẹ tôi đang uống Xarelto 15mg")
+        # Loại bỏ các từ dẫn chuyện phổ biến ở đầu/cuối cụm để trích tên thuốc lạ gọn gàng
         cleaned_tokens = norm_seg.split()
         while cleaned_tokens and cleaned_tokens[0] in _VI_COMMON_WORDS and not norm_seg.startswith(_UNKNOWN_MED_PREFIXES):
             cleaned_tokens.pop(0)
@@ -605,16 +835,82 @@ def lookup_drug_info(query: str) -> dict:
             norm_seg = " ".join(cleaned_tokens)
 
         if _looks_like_unknown_drug(raw_clean, norm_seg):
-            label = raw_clean if len(raw_clean) <= 45 else norm_seg
-            if label not in unknown and _norm(label) not in {_norm(u) for u in unknown}:
+            non_common_orig = [
+                w.strip(".,?!;:()[]{}\"'")
+                for w in raw_clean.split()
+                if _norm(w) and _norm(w) not in _VI_COMMON_WORDS and _norm(w) not in _DRUG_SALT_WORDS and not _norm(w).isdigit()
+            ]
+            if len(raw_clean) > 30 and non_common_orig:
+                label = " ".join(non_common_orig)
+            else:
+                label = raw_clean if len(raw_clean) <= 45 else norm_seg
+            if label and label not in unknown and _norm(label) not in {_norm(u) for u in unknown}:
                 unknown.append(label)
+                normalized.append({
+                    "input": label,
+                    "ingredient": None,
+                    "code": None,
+                    "matched": False,
+                    "match_type": "unknown",
+                })
 
     found = sorted(found_by_code.values(), key=lambda d: d["code"])
     return {
         "source": source,
         "found": found,
+        "normalized": normalized,
         "fuzzy_matches": fuzzy_matches,
         "unknown": unknown,
+    }
+
+
+@tool
+def check_duplicates(normalized_list) -> dict:
+    """check_duplicates · Input: danh sách thuốc đã chuẩn hóa (list[dict] hoặc dict có khoá 'normalized') · Output: dict {has_duplicates, duplicates, count} phát hiện thuốc khác tên nhưng trùng hoạt chất · Tác động ra ngoài: Không (chỉ đối chiếu trong bộ nhớ)."""
+    items = normalized_list.get("normalized", []) if isinstance(normalized_list, dict) else (normalized_list or [])
+    grouped = {}
+    for it in items:
+        if not isinstance(it, dict) or not it.get("matched"):
+            continue
+        key = it.get("code") or it.get("drug_code") or _norm(it.get("ingredient", ""))
+        if not key:
+            continue
+        grouped.setdefault(key, []).append(it)
+
+    duplicates = []
+    for key, entries in grouped.items():
+        if len(entries) < 2:
+            continue
+        ingredient = entries[0].get("ingredient", "")
+        drug_code = entries[0].get("code") or entries[0].get("drug_code") or ""
+        inputs = [str(e.get("input", "")).strip() for e in entries if str(e.get("input", "")).strip()]
+        if len(inputs) < 2:
+            continue
+        duplicates.append({
+            "code": "DUP-" + (drug_code or _norm(ingredient).upper()),
+            "drug_code": drug_code,
+            "ingredient": ingredient,
+            "pair": inputs[:2] if len(inputs) == 2 else inputs,
+            "inputs": inputs,
+            "severity": "trung_binh",
+            "severity_level": "YELLOW",
+            "action": "hoi_duoc_si",
+            "reason": (
+                "Phát hiện trùng hoạt chất %s: %s đều chứa cùng hoạt chất %s, "
+                "dùng đồng thời dễ gây quá liều và tăng tác dụng phụ."
+                % (ingredient, " và ".join(inputs), ingredient)
+            ),
+            "action_text": (
+                "Không tự ý uống gộp %s cùng lúc; chỉ giữ 1 sản phẩm và hỏi dược sĩ để kiểm tra tổng liều %s."
+                % (" và ".join(inputs), ingredient)
+            ),
+            "citation": "DATA_CARD (%s — %s)" % (drug_code or "DRUG", ingredient),
+        })
+
+    return {
+        "has_duplicates": bool(duplicates),
+        "duplicates": duplicates,
+        "count": len(duplicates),
     }
 
 
@@ -622,7 +918,6 @@ def lookup_drug_info(query: str) -> dict:
 def check_interactions(drug_names: list) -> dict:
     """check_interactions · Input: danh sách tên hoạt chất generic_name (list[str]) · Output: dict {source, checked_pairs, interactions, highest_severity, counts} với mã INT-xx, mức độ và hướng xử trí · Tác động ra ngoài: Không (chỉ đọc bảng tương tác)."""
     interactions_db, source = _load_interactions()
-    # Loại trùng, giữ thứ tự
     unique_drugs = []
     seen = set()
     for name in drug_names or []:
@@ -642,7 +937,11 @@ def check_interactions(drug_names: list) -> dict:
         checked_pairs += 1
         hit = index.get(frozenset([n1, n2]))
         if hit:
-            found.append(dict(hit))
+            rec = dict(hit)
+            code = rec.get("code", "")
+            rec["severity_level"] = SEVERITY_TO_LEVEL.get(rec.get("severity", "khong"), "GREEN")
+            rec["citation"] = _INTERACTION_CITATIONS.get(code, source)
+            found.append(rec)
 
     found.sort(key=lambda r: (-SEVERITY_ORDER.get(r.get("severity", "khong"), 0), r.get("code", "")))
     counts = {
@@ -657,6 +956,42 @@ def check_interactions(drug_names: list) -> dict:
         "interactions": found,
         "highest_severity": highest,
         "counts": counts,
+    }
+
+
+@tool
+def lookup_interactions(normalized_list) -> dict:
+    """lookup_interactions · Input: danh sách thuốc đã chuẩn hóa (list[dict], dict có khoá 'normalized', hoặc list[str]) · Output: dict {source, checked_pairs, interactions, highest_severity, counts} kèm cặp tên thuốc gốc và trích dẫn nguồn DATA_CARD · Tác động ra ngoài: Không (chỉ đọc data/interactions.json)."""
+    items = normalized_list.get("normalized", []) if isinstance(normalized_list, dict) else (normalized_list or [])
+    display_by_norm = {}
+    drug_names = []
+    for it in items:
+        if isinstance(it, dict):
+            if not it.get("matched") or not it.get("ingredient"):
+                continue
+            ing = str(it["ingredient"])
+            raw_in = str(it.get("input") or ing).strip()
+            drug_names.append(ing)
+            display_by_norm.setdefault(_norm(ing), raw_in)
+        elif isinstance(it, str) and it.strip():
+            drug_names.append(it.strip())
+            display_by_norm.setdefault(_norm(it.strip()), it.strip())
+
+    res = check_interactions(drug_names)
+    enriched = []
+    for r in res["interactions"]:
+        item = dict(r)
+        da = display_by_norm.get(_norm(item.get("drug_a", "")), item.get("drug_a", ""))
+        db = display_by_norm.get(_norm(item.get("drug_b", "")), item.get("drug_b", ""))
+        item["pair"] = [da, db]
+        enriched.append(item)
+
+    return {
+        "source": res["source"],
+        "checked_pairs": res["checked_pairs"],
+        "interactions": enriched,
+        "highest_severity": res["highest_severity"],
+        "counts": res["counts"],
     }
 
 
