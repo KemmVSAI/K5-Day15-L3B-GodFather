@@ -8,6 +8,7 @@ import {
 import { PRESET_SCENARIOS } from '@/mocks/demoSessions';
 import type {
   AIExplanationBlocks,
+  InteractionSeverity,
   MedicationReviewRequest,
   MedicationReviewResult,
   OverallSafetyStatus,
@@ -27,13 +28,273 @@ import type {
 import { normalizeText, stripDosageTokens } from '@/utils/cn';
 
 const SESSIONS_STORAGE_KEY = 'familymed_review_sessions_v2';
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
+  'http://127.0.0.1:8000';
 
 export class ApiUnavailableError extends Error {
   constructor(message = 'Không thể kết nối đến máy chủ FamilyMed. Vui lòng thử lại hoặc dùng chế độ dữ liệu mẫu.') {
     super(message);
     this.name = 'ApiUnavailableError';
   }
+}
+
+interface BackendAnalyzeResponse {
+    risk_level: 'RED' | 'YELLOW' | 'GREEN';
+    risk_summary: string;
+    escalate_to_pharmacist: boolean;
+    interactions: Array<{
+      pair: string[];
+      severity: 'RED' | 'YELLOW' | 'GREEN';
+      reason: string;
+      action: string;
+    }>;
+    schedule_locked: boolean;
+    schedule: Record<'morning' | 'noon' | 'evening' | 'bedtime', Array<{
+      name: string;
+      ingredient: string;
+      drug_code: string;
+      timing: string;
+      note: string;
+    }>>;
+    pharmacist_summary: string;
+    trace: {
+      normalized_ingredients: Array<{
+        input: string;
+        ingredient: string | null;
+        matched: boolean;
+      }>;
+      tool_lookups: string[];
+      guardrail_decision: string;
+      model_note?: string;
+      separation_notes?: string[];
+    };
+}
+
+function backendSeverityToFrontend(severity: 'RED' | 'YELLOW' | 'GREEN'): InteractionSeverity {
+    if (severity === 'RED') return 'nang';
+    if (severity === 'YELLOW') return 'trung_binh';
+    return 'nhe';
+}
+
+function buildBackendReviewResult(
+    request: MedicationReviewRequest,
+    data: BackendAnalyzeResponse,
+  ): MedicationReviewResult {
+    const normalizedByInput = new Map(
+      data.trace.normalized_ingredients.map((item) => [normalizeText(item.input), item]),
+    );
+    const medications = request.medications.map((item) => {
+      const normalized = normalizedByInput.get(normalizeText(item.rawName));
+      if (!normalized) return item;
+      if (normalized.matched) {
+        return {
+          ...item,
+          recognitionStatus: 'confirmed' as const,
+          activeIngredient: normalized.ingredient || item.activeIngredient,
+          matchedGenericName: normalized.ingredient || item.matchedGenericName,
+        };
+      }
+      return {
+        ...item,
+        recognitionStatus: 'not_in_catalog' as const,
+        matchReason: 'Thuốc chưa có trong dữ liệu backend.',
+      };
+    });
+
+    const pairComparisons: PairComparisonItem[] = data.interactions
+      .filter((interaction) => interaction.pair.length >= 2)
+      .map((interaction, index) => ({
+        id: `api-pair-${index + 1}`,
+        drugAName: interaction.pair[0],
+        drugBName: interaction.pair[1],
+        severity: backendSeverityToFrontend(interaction.severity),
+        dataDescription: interaction.reason,
+        plainExplanation: interaction.action,
+        verificationStatus: 'interaction_found',
+        sourceInfo: 'data/interactions-byt.json',
+      }));
+
+    const unknownMedicationsCount = medications.filter(
+      (item) => item.recognitionStatus === 'not_in_catalog',
+    ).length;
+    const confirmedInCatalog = medications.length - unknownMedicationsCount;
+    const totalPairsTheoretical =
+      medications.length > 1 ? (medications.length * (medications.length - 1)) / 2 : 0;
+
+    const severityCounts = {
+      nang: pairComparisons.filter((item) => item.severity === 'nang').length,
+      trung_binh: pairComparisons.filter((item) => item.severity === 'trung_binh').length,
+      nhe: pairComparisons.filter((item) => item.severity === 'nhe').length,
+      noRecord: 0,
+      unknown: unknownMedicationsCount,
+    };
+
+    const slotMap: Record<TimeSlot, ScheduleSlotEntry[]> = {
+      sang: data.schedule.morning.map((item) => ({
+        code: item.drug_code,
+        genericName: item.ingredient,
+        displayName: item.name,
+        mealRelation: 'bat_ky',
+        mealLabel: item.timing,
+        timingNote: item.note,
+        status: 'nhap_cho_nguoi_xac_nhan',
+      })),
+      trua: data.schedule.noon.map((item) => ({
+        code: item.drug_code,
+        genericName: item.ingredient,
+        displayName: item.name,
+        mealRelation: 'bat_ky',
+        mealLabel: item.timing,
+        timingNote: item.note,
+        status: 'nhap_cho_nguoi_xac_nhan',
+      })),
+      toi: [
+        ...data.schedule.evening,
+        ...data.schedule.bedtime,
+      ].map((item) => ({
+        code: item.drug_code,
+        genericName: item.ingredient,
+        displayName: item.name,
+        mealRelation: 'bat_ky',
+        mealLabel: item.timing,
+        timingNote: item.note,
+        status: 'nhap_cho_nguoi_xac_nhan',
+      })),
+    };
+
+    const overallStatus: OverallSafetyStatus =
+      data.risk_level === 'RED' ? 'red' : data.risk_level === 'YELLOW' ? 'amber' : 'green';
+    const handoffWarnings = data.interactions
+      .filter((interaction) => interaction.pair.length >= 2)
+      .map((interaction, index) => ({
+        code: `API-${index + 1}`,
+        pair: interaction.pair.join(' + '),
+        severity: backendSeverityToFrontend(interaction.severity),
+        summary: interaction.reason,
+      }))
+      .filter((item) => item.severity !== 'unknown');
+
+    const now = new Date();
+    return {
+      sessionId: `api-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: now.toISOString(),
+      sourceMode: 'backend_api',
+      profile: request.profile,
+      medications,
+      redFlag: {
+        detected: data.risk_level === 'RED',
+        matchedFlags: data.risk_level === 'RED' ? ['backend_guardrail'] : [],
+        message: data.risk_level === 'RED'
+          ? data.risk_summary
+          : 'Không phát hiện dấu hiệu cấp cứu trong dữ liệu đầu vào.',
+      },
+      overview: {
+        overallStatus,
+        statusHeadline: data.risk_summary,
+        coverageSummary: `${confirmedInCatalog}/${medications.length} thuốc có trong danh mục backend.`,
+        missingInfoSummary: unknownMedicationsCount
+          ? `${unknownMedicationsCount} thuốc chưa được nhận diện.`
+          : undefined,
+        totalMedications: medications.length,
+        confirmedInCatalog,
+        unknownMedicationsCount,
+        duplicateActiveIngredients: [],
+        totalPairsTheoretical,
+        pairsCheckedInCatalog: pairComparisons.length,
+        pairsNotCovered: totalPairsTheoretical - pairComparisons.length,
+        severityCounts,
+      },
+      pairComparisons,
+      aiExplanation: {
+        isAiInterpretation: true,
+        isMockResponse: data.trace.model_note?.startsWith('mock') ?? false,
+        whatSystemChecked: `Đối chiếu ${medications.length} tên thuốc và các cặp tương tác trong backend.`,
+        whatWasFound: data.risk_summary,
+        dataLimitations: 'Kết quả chỉ dựa trên dữ liệu và quy tắc hiện có, không thay thế tư vấn y khoa.',
+        whatToDoNext: data.escalate_to_pharmacist
+          ? 'Đối chiếu lại với bác sĩ hoặc dược sĩ trước khi dùng chung.'
+          : 'Kiểm tra lại tên thuốc, liều dùng và hướng dẫn trên đơn.',
+      },
+      scheduleDraft: {
+        allowed: !data.schedule_locked,
+        blockedReason: data.schedule_locked
+          ? 'Backend đã khoá lịch do cảnh báo hoặc guardrail.'
+          : undefined,
+        slots: slotMap,
+        separationNotes: data.trace.separation_notes || [],
+        heldForPharmacist: data.escalate_to_pharmacist
+          ? [{ code: 'PHARMACIST', pair: 'Danh sách thuốc', recommendation: data.pharmacist_summary }]
+          : [],
+        disclaimer: 'Lịch do backend tạo là bản nháp, cần xác nhận bởi bác sĩ hoặc dược sĩ.',
+      },
+      handoffDraft: {
+        draftId: `handoff-${now.getTime()}`,
+        sent: false,
+        statusLabel: data.escalate_to_pharmacist ? 'Cần hỏi dược sĩ' : 'Thông tin tham khảo',
+        priority: data.risk_level === 'RED'
+          ? 'UU_TIEN'
+          : unknownMedicationsCount > 0
+            ? 'UU_TIEN'
+            : 'THUONG_QUY',
+        medications: medications.map((item) => ({
+          displayName: item.rawName,
+          ...(item.matchedGenericName ? { genericName: item.matchedGenericName } : {}),
+          ...(item.matchedDrugCode ? { code: item.matchedDrugCode } : {}),
+          ...(item.strength ? { strength: item.strength } : {}),
+          inCatalog: item.recognitionStatus !== 'not_in_catalog',
+        })),
+        foundWarnings: handoffWarnings
+          .filter((item): item is { code: string; pair: string; severity: 'nang' | 'trung_binh' | 'nhe'; summary: string } =>
+            item.severity === 'nang' || item.severity === 'trung_binh' || item.severity === 'nhe',
+          ),
+        unknownMedications: medications
+          .filter((item) => item.recognitionStatus === 'not_in_catalog')
+          .map((item) => item.rawName),
+        missingInformation: [],
+        suggestedQuestions: [
+          'Các thuốc này có thể dùng chung không?',
+          'Nếu cần tách giờ, lịch uống cụ thể là gì?',
+        ],
+        plainTextSummary: data.pharmacist_summary,
+      },
+      safetySummaryBanner: data.risk_summary,
+      technicalTrace: {
+        steps: [
+          {
+            workflow: 'backend_analyze',
+            component: 'backend_agent',
+            status: 'completed',
+            summary: data.trace.guardrail_decision,
+          },
+          ...data.trace.tool_lookups.map((lookup) => ({
+            workflow: 'tool_lookup',
+            component: 'backend_tools',
+            status: 'completed' as const,
+            summary: lookup,
+          })),
+        ],
+        structuredOutput: {
+          recognized_medications: data.trace.normalized_ingredients
+            .filter((item) => item.matched)
+            .map((item) => item.input),
+          checked_pairs: pairComparisons.length,
+          unresolved_medications: data.trace.normalized_ingredients
+            .filter((item) => !item.matched)
+            .map((item) => item.input),
+          severity_max: data.risk_level === 'RED'
+            ? 'nang'
+            : data.risk_level === 'YELLOW'
+              ? 'trung_binh'
+              : 'khong',
+          allow_schedule: !data.schedule_locked,
+          has_unmapped: unknownMedicationsCount > 0,
+          requires_pharmacist: data.escalate_to_pharmacist,
+          triggered_rules: data.trace.tool_lookups,
+        },
+        telemetry: null,
+      },
+    };
 }
 
 function levenshteinRatio(a: string, b: string): number {
@@ -983,63 +1244,51 @@ export const medicationService = {
   },
 
   async extractMedicationsFromText(rawText: string): Promise<ExtractMedicationsResponse> {
-    if (API_BASE_URL) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/medications/extract`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: rawText }),
-        });
-        if (!res.ok) throw new ApiUnavailableError();
-        return (await res.json()) as ExtractMedicationsResponse;
-      } catch {
-        throw new ApiUnavailableError();
-      }
-    }
-
     await new Promise((resolve) => setTimeout(resolve, 320));
     return localExtractFromText(rawText);
   },
 
   async normalizeMedication(query: string): Promise<NormalizeMedicationResponse> {
-    if (API_BASE_URL) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/medications/normalize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query }),
-        });
-        if (!res.ok) throw new ApiUnavailableError();
-        return (await res.json()) as NormalizeMedicationResponse;
-      } catch {
-        throw new ApiUnavailableError();
-      }
-    }
-
     await new Promise((resolve) => setTimeout(resolve, 240));
     return localNormalizeMedication(query);
   },
 
   async reviewMedications(request: MedicationReviewRequest): Promise<MedicationReviewResult> {
-    if (API_BASE_URL) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/medications/review`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(request),
-        });
-        if (!res.ok) throw new ApiUnavailableError();
-        const data = (await res.json()) as MedicationReviewResult;
-        const existing = readStoredSessions();
-        writeStoredSessions([data, ...existing.filter((s) => s.sessionId !== data.sessionId)]);
-        return data;
-      } catch {
-        throw new ApiUnavailableError();
+    let result: MedicationReviewResult;
+    try {
+      const medications = request.medications.map((item) =>
+        item.matchedGenericName || item.normalizedName || item.rawName,
+      );
+      const notes = [
+        request.profile.notes,
+        ...request.medications
+          .map((item) => item.prescriptionNote)
+          .filter((note): note is string => Boolean(note)),
+      ].filter(Boolean).join('. ');
+      const res = await fetch(`${API_BASE_URL}/api/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ medications, notes }),
+      });
+      if (!res.ok) {
+        let message = 'Backend không thể phân tích danh sách thuốc.';
+        try {
+          const errorBody = await res.json();
+          message =
+            errorBody?.detail?.message ||
+            errorBody?.detail ||
+            message;
+        } catch {
+          // Giữ thông báo mặc định nếu backend không trả JSON.
+        }
+        throw new ApiUnavailableError(message);
       }
+      const data = (await res.json()) as BackendAnalyzeResponse;
+      result = buildBackendReviewResult(request, data);
+    } catch (error) {
+      if (error instanceof ApiUnavailableError) throw error;
+      throw new ApiUnavailableError();
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 360));
-    const result = evaluateLocally(request);
     const existing = readStoredSessions();
     writeStoredSessions([result, ...existing.filter((s) => s.sessionId !== result.sessionId)]);
     return result;
