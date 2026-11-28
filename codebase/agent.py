@@ -18,6 +18,7 @@ import re
 from ai import call_model
 from tools import (
     _norm,
+    _strip_dosage,
     build_schedule,
     check_duplicates,
     check_interactions,
@@ -500,9 +501,10 @@ def answer(text: str) -> dict:
     # Bước 2a: Kiểm tra trùng hoạt chất
     dups = check_duplicates(lookup.get("normalized") or [])
 
-    # Bước 2b: Kiểm tra tương tác từng cặp thuốc đã nhận diện
+    # Bước 2b: Kiểm tra tương tác từng cặp (12 cặp chính + 633 cặp chống chỉ định QĐ 5948/QĐ-BYT cho cả thuốc ngoài 18 hoạt chất)
     generic_names = [d["generic_name"] for d in found]
-    inter = check_interactions(generic_names)
+    unknown_clean = [_strip_dosage(_norm(u)) for u in unknown if _strip_dosage(_norm(u))]
+    inter = check_interactions(generic_names + unknown_clean)
 
     # Bước 3: Soạn lịch uống nháp (áp quy tắc tách giờ và đánh dấu cặp nặng chờ dược sĩ)
     schedule = build_schedule(found, inter["interactions"])
@@ -510,7 +512,7 @@ def answer(text: str) -> dict:
     # Bước 4: Quyết định tạo phiếu nháp chuyển dược sĩ (chỉ tạo khi có lý do rõ, tránh chuyển thừa ở ca sạch/fuzzy nhẹ)
     handoff_reasons = []
     if inter["counts"]["nang"] > 0:
-        handoff_reasons.append("Có %d cặp tương tác mức NẶNG cần bác sĩ/dược sĩ xác nhận đơn" % inter["counts"]["nang"])
+        handoff_reasons.append("Có %d cặp tương tác mức NẶNG / chống chỉ định cần bác sĩ/dược sĩ xác nhận đơn" % inter["counts"]["nang"])
     hoi_ds_med = [r for r in inter["interactions"] if r["severity"] == "trung_binh" and r["action"] == "hoi_duoc_si"]
     if hoi_ds_med:
         handoff_reasons.append("Có %d cặp tương tác mức TRUNG BÌNH cần dược sĩ kiểm tra liều/cách phối hợp" % len(hoi_ds_med))
@@ -518,6 +520,12 @@ def answer(text: str) -> dict:
         handoff_reasons.append(
             "Phát hiện trùng hoạt chất (%s) cần dược sĩ xác nhận tránh quá liều"
             % ", ".join(dp["ingredient"] for dp in dups["duplicates"])
+        )
+    combo_found = [d for d in found if d.get("is_combination")]
+    if combo_found:
+        handoff_reasons.append(
+            "Có thuốc phối hợp nhiều hoạt chất (%s) cần dược sĩ kiểm tra các hoạt chất đi kèm trên vỏ hộp"
+            % ", ".join(d.get("matched_term") or d["generic_name"] for d in combo_found)
         )
     if unknown:
         handoff_reasons.append("Có %d thuốc chưa có trong dữ liệu (%s)" % (len(unknown), ", ".join(unknown)))

@@ -1,15 +1,9 @@
 """backend_tools.py — Phần 1 của Backend (theo tài liệu phân công 3 phần).
 
 Chuẩn hóa & Tra cứu cho tầng API:
-    normalize_medications(med_list)  → chuẩn hóa tên thuốc gõ tự do → hoạt chất chuẩn
+    normalize_medications(med_list)  → chuẩn hóa tên thuốc gõ tự do (hỗ trợ 2.800+ registered_brands DAV & combination_brands)
     check_duplicates(normalized)     → phát hiện 2 tên khác nhau trùng hoạt chất
-    lookup_interactions(norm_list)   → tra mọi cặp tương tác từ data chuẩn (kèm nguồn)
-
-Nguyên tắc:
-    - CHỈ ĐỌC data/drugs.json + data/interactions.json (tái dùng loader của codebase/tools.py).
-    - Không bịa: thuốc không nhận diện được → gắn cờ trong unknown_meds, KHÔNG suy ra gì.
-    - Các hàm độc lập (không @tool) để không làm nhiễu trace của khung eval; luồng eval
-      vẫn đi qua codebase/agent.py như cũ.
+    lookup_interactions(norm_list)   → tra mọi cặp tương tác (12 cặp chính + 633 cặp chống chỉ định QĐ 5948/QĐ-BYT)
 
 Chạy độc lập (DoD): python backend_tools.py — tự chạy 4 ca mẫu (an toàn/vàng/đỏ/edge), không crash.
 """
@@ -23,13 +17,14 @@ if _CODEBASE not in sys.path:
     sys.path.insert(0, _CODEBASE)
 
 from tools import (  # noqa: E402
-    _EXTRA_ALIASES,
     _VI_COMMON_WORDS,
-    _load_drugs,
+    _canon_byt,
+    _get_drug_indices,
     _norm,
     _strip_dosage,
     check_interactions,
     data_status,
+    search_drugs,
 )
 
 # Mức tương tác trong data ("nang"/"trung_binh"/"nhe") → mức 3 màu Frontend
@@ -38,43 +33,21 @@ COLOR_OF_HIGHEST = {"nang": "RED", "trung_binh": "YELLOW", "nhe": "YELLOW", "kho
 
 
 def normalize_medications(med_list):
-    """Chuẩn hóa danh sách tên thuốc người dùng gõ sang hoạt chất chuẩn.
+    """Chuẩn hóa danh sách tên thuốc người dùng gõ sang hoạt chất chuẩn (tận dụng index đã đệm từ tools.py).
 
     Input:  med_list — list[str] (vd ["Aspirin 81mg", "Warfarin 5mg"]) hoặc None.
-    Output: dict {normalized, ingredients, unknown_meds, fuzzy_matches, source}.
+    Output: dict {normalized, ingredients, unknown_meds, fuzzy_matches, combination_meds, source}.
     Không tác động ra ngoài — chỉ đọc data.
     """
-    drugs, source = _load_drugs()
+    idx = _get_drug_indices()
+    drugs = idx["drugs"]
+    source = idx["source"]
     med_list = [str(m).strip() for m in (med_list or []) if str(m).strip()]
     if not med_list:
         return {
             "normalized": [], "ingredients": [], "unknown_meds": [],
-            "fuzzy_matches": [], "source": source,
+            "fuzzy_matches": [], "combination_meds": [], "source": source,
         }
-
-    # Bảng ánh xạ alias/extra/generic/registered_brands v2 -> drug
-    alias_map = {}
-    core_keys = []
-    brand_norms = []
-    for d in drugs:
-        extra = _EXTRA_ALIASES.get(d.get("code", ""), [])
-        terms = list(d.get("aliases") or []) + list(extra) + [d.get("generic_name", "")]
-        for t in terms:
-            nt = _norm(t)
-            if nt:
-                if nt not in alias_map:
-                    alias_map[nt] = d
-                    core_keys.append(nt)
-        for b in d.get("registered_brands", []):
-            nb = _norm(b)
-            if nb and len(nb) >= 4 and nb not in _VI_COMMON_WORDS:
-                if nb not in alias_map:
-                    alias_map[nb] = d
-                brand_norms.append(nb)
-
-    # Ưu tiên alias dài hơn khớp trước để tránh khớp nhầm chuỗi ngắn
-    sorted_aliases = sorted(alias_map.items(), key=lambda x: len(x[0]), reverse=True)
-    sorted_brands = sorted(set(brand_norms), key=len, reverse=True)
 
     MEAL_LABEL = {"truoc_an": "Trước ăn", "sau_an": "Sau ăn", "bat_ky": "Trước hoặc sau ăn"}
 
@@ -82,6 +55,7 @@ def normalize_medications(med_list):
     ingredients_seen = {}
     unknown_meds = []
     fuzzy_matches = []
+    combination_meds = []
 
     for raw in med_list:
         norm_q = _norm(raw)
@@ -89,34 +63,40 @@ def normalize_medications(med_list):
         drug = None
         match_type = None
         matched_term = None
+        is_combination = False
 
-        # 1) Khớp chính xác cả cụm (đã bỏ hàm lượng)
-        for cand in (stripped, norm_q):
-            if cand in alias_map:
-                drug = alias_map[cand]
+        # 1) Khớp O(1) registered_brands / combination_brands / core alias
+        for cand in (norm_q, stripped):
+            if cand in idx["core_to_drug"]:
+                drug = idx["core_to_drug"][cand]
                 matched_term = cand
                 match_type = "exact"
                 break
+            if cand in idx["brand_map"]:
+                orig_b, d, is_cb = idx["brand_map"][cand]
+                drug = d
+                matched_term = orig_b
+                match_type = "exact"
+                is_combination = is_cb
+                break
+            if cand in idx["combo_map"]:
+                orig_cb, d = idx["combo_map"][cand]
+                drug = d
+                matched_term = orig_cb
+                match_type = "combination"
+                is_combination = True
+                break
 
-        # 2) Chứa tên chuẩn theo ranh giới từ
+        # 2) Chứa alias cốt lõi theo ranh giới từ (vd "Canxi Carbonate 500mg" -> "canxi carbonate")
         if drug is None:
-            for nt, d in sorted_aliases:
+            for nt, orig_al, d in idx["core_entries"]:
                 if re.search(r"(?<!\w)" + re.escape(nt) + r"(?!\w)", norm_q):
                     drug = d
-                    matched_term = nt
+                    matched_term = orig_al
                     match_type = "exact"
                     break
 
-        # 3) Brand có khoảng trắng (vd 'concor 5mg' -> 'concor')
-        if drug is None:
-            for nb in sorted_brands:
-                if norm_q.startswith(nb + " ") or norm_q == nb:
-                    drug = alias_map[nb]
-                    matched_term = nb
-                    match_type = "exact"
-                    break
-
-        # 3b) Thành phần đơn của thuốc phối hợp (vd "Vitamin D3" -> Calcium + Vitamin D3)
+        # 3) Thành phần đơn của thuốc phối hợp trong generic_name (vd "Vitamin D3" -> "Calcium + Vitamin D3")
         if drug is None:
             for d in drugs:
                 gname = d.get("generic_name", "")
@@ -140,9 +120,9 @@ def normalize_medications(med_list):
             for tok in cands:
                 if not tok or tok in _VI_COMMON_WORDS:
                     continue
-                close = difflib.get_close_matches(tok, core_keys, n=1, cutoff=0.80)
+                close = difflib.get_close_matches(tok, idx["core_norms"], n=1, cutoff=0.80)
                 if close:
-                    drug = alias_map[close[0]]
+                    drug = idx["core_to_drug"][close[0]]
                     matched_term = tok
                     match_type = "fuzzy"
                     break
@@ -156,6 +136,7 @@ def normalize_medications(med_list):
                 "drug_code": drug["code"],
                 "matched": True,
                 "match_type": match_type,
+                "is_combination": is_combination,
                 "slots": list(drug.get("recommended_slots") or []),
                 "meal_relation": drug.get("meal_relation", "bat_ky"),
                 "meal_label": MEAL_LABEL.get(drug.get("meal_relation", "bat_ky"), "Trước hoặc sau ăn"),
@@ -166,12 +147,13 @@ def normalize_medications(med_list):
             ingredients_seen.setdefault(ing, drug["code"])
             if match_type == "fuzzy":
                 fuzzy_matches.append({"input": raw, "matched_generic": ing, "code": drug["code"]})
+            if is_combination:
+                combination_meds.append({"input": raw, "matched_generic": ing, "code": drug["code"]})
         else:
-            # Không nhận diện được — KHÔNG suy ra gì (C2), chỉ gắn cờ
             unknown_meds.append(raw)
             normalized.append({
                 "input": raw, "matched_term": None, "ingredient": None, "drug_code": None,
-                "matched": False, "match_type": "unknown",
+                "matched": False, "match_type": "unknown", "is_combination": False,
                 "slots": [], "meal_relation": None, "meal_label": None,
                 "timing_note": None, "warnings": [],
             })
@@ -181,17 +163,13 @@ def normalize_medications(med_list):
         "ingredients": sorted(ingredients_seen.keys()),
         "unknown_meds": unknown_meds,
         "fuzzy_matches": fuzzy_matches,
+        "combination_meds": combination_meds,
         "source": source,
     }
 
 
 def check_duplicates(normalized):
-    """Phát hiện 2 tên thuốc khác nhau nhưng trùng hoạt chất (vd Panadol + Efferalgan đều Paracetamol).
-
-    Input:  normalized — kết quả của normalize_medications().
-    Output: dict {"duplicates": [{ingredient, drug_code, inputs}], "count": int}.
-    Không tác động ra ngoài.
-    """
+    """Phát hiện 2 tên thuốc khác nhau nhưng trùng hoạt chất (vd Panadol + Efferalgan đều Paracetamol)."""
     groups = {}
     code_map = {}
     for entry in normalized.get("normalized", []):
@@ -210,32 +188,36 @@ def check_duplicates(normalized):
 
 
 def lookup_interactions(normalized):
-    """Tra mọi cặp tương tác giữa các hoạt chất đã chuẩn hóa, kèm nguồn trích dẫn.
-
-    Input:  normalized — kết quả của normalize_medications().
-    Output: dict của check_interactions() + "pairs_input" map sang tên gốc người dùng nhập.
-    Không tác động ra ngoài.
-    """
-    ingredients = normalized.get("ingredients", [])
-    inter = check_interactions(ingredients)
+    """Tra mọi cặp tương tác (12 cặp chính + 633 cặp chống chỉ định QĐ 5948/QĐ-BYT), kèm tên gốc và trích dẫn."""
+    ingredients = list(normalized.get("ingredients", []))
     display = {}
     for entry in normalized.get("normalized", []):
         if entry.get("matched") and entry.get("ingredient"):
-            display.setdefault(entry["ingredient"], entry["input"])
+            display.setdefault(_canon_byt(entry["ingredient"]), entry["input"])
+        elif entry.get("input"):
+            # Cho phép tra nguồn chính thức QĐ 5948/QĐ-BYT cả với hoạt chất ngoài 18 thuốc (vd Clarithromycin)
+            stripped = _strip_dosage(_norm(entry["input"]))
+            if stripped:
+                ingredients.append(stripped)
+                display.setdefault(_canon_byt(stripped), entry["input"])
 
+    inter = check_interactions(ingredients)
     pairs_input = []
     for r in inter["interactions"]:
         pairs_input.append({
             "code": r["code"],
             "pair_ingredients": [r["drug_a"], r["drug_b"]],
-            "pair_inputs": [display.get(r["drug_a"], r["drug_a"]), display.get(r["drug_b"], r["drug_b"])],
+            "pair_inputs": [
+                display.get(_canon_byt(r["drug_a"]), r["drug_a"]),
+                display.get(_canon_byt(r["drug_b"]), r["drug_b"]),
+            ],
             "severity": r["severity"],
             "severity_color": SEVERITY_TO_COLOR.get(r["severity"], "YELLOW"),
             "action": r.get("action", ""),
             "summary": r.get("summary", ""),
             "recommendation": r.get("recommendation", ""),
             "citation": r.get("citation", inter.get("source", "")),
-            "source": inter.get("source", ""),
+            "source": r.get("source", inter.get("source", "")),
         })
     inter["pairs_input"] = pairs_input
     return inter
@@ -253,6 +235,7 @@ if __name__ == "__main__":
         "Vàng": ["Levothyroxine 50mcg", "Canxi Carbonate 500mg", "Panadol 500mg", "Efferalgan 500mg"],
         "Đỏ": ["Warfarin 5mg", "Aspirin 81mg", "Ibuprofen 400mg", "Omeprazole 20mg"],
         "Thuốc lạ": ["Thuốc huyết áp viên màu hồng", "Thuốc đau đầu gói xanh"],
+        "BYT 5948": ["Simvastatin 20mg", "Clarithromycin 500mg"],
     }
     for name, meds in CASES.items():
         print("=" * 60)

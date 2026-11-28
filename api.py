@@ -37,7 +37,7 @@ import ai as ai_module  # noqa: E402
 import agent as core_agent  # noqa: E402
 import backend_agent  # noqa: E402
 import tracing  # noqa: E402
-from tools import data_status  # noqa: E402
+from tools import data_status, search_drugs  # noqa: E402
 
 API_TIMEOUT_SECONDS = int(os.environ.get("API_ANALYZE_TIMEOUT_SECONDS", "90"))
 
@@ -176,15 +176,23 @@ def status():
     provider, model_name, _, _ = ai_module._runtime_config()
     if not model_name and provider == "openrouter":
         model_name = (ai_module._OPENROUTER_FALLBACKS or [""])[0]
-    n_drugs, n_int = _load_status_counts()
+    ds = data_status()
     return {
         "model": provider,
         "model_name": model_name or ("fake" if provider == "fake" else ""),
         "demo_mode": provider in ("", "fake"),
-        "sources": data_status(),
-        "drugs_count": n_drugs,
-        "interactions_count": n_int,
+        "sources": ds,
+        "drugs_count": ds["drugs_count"],
+        "registered_brands_count": ds["registered_brands_count"],
+        "interactions_count": ds["interactions_count"],
+        "byt_interactions_count": ds["byt_interactions_count"],
     }
+
+
+@app.get("/api/drugs/search")
+def drugs_search(q: str = "", limit: int = 10):
+    """Gợi ý tên thuốc (autocomplete) trên 18 hoạt chất + aliases + 2.800 biệt dược đăng ký DAV."""
+    return {"query": q, "results": search_drugs(q, limit=limit)}
 
 
 @app.get("/api/presets")

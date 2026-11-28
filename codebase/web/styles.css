@@ -344,3 +344,5 @@ textarea:focus { outline: 2px solid var(--c-focus); outline-offset: 1px; border-
   .brand-text p { display: none; }
   .demo-row .chip { flex: 1 1 45%; }
 }
+
+.muted { color: #6b7280; font-size: 13px; }

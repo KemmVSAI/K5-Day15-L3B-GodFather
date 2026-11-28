@@ -347,10 +347,12 @@ def analyze_medications(medications, notes="", trace_id="api"):
             p.get("severity") == "trung_binh" and p.get("action") == "hoi_duoc_si"
             for p in inter_result.get("pairs_input", [])
         )
+        combo_meds = norm_result.get("combination_meds", [])
         escalate = bool(
             risk == "RED"
             or unknown
             or dup_result.get("count", 0) > 0
+            or combo_meds
             or hoi_ds_med
             or guard.get("prescribe_request")
         )
@@ -405,7 +407,12 @@ def analyze_medications(medications, notes="", trace_id="api"):
                     % (" + ".join(d["inputs"]), d["ingredient"])
                 )
         if unknown:
-            tool_lookups.append("Thuốc chưa có trong dữ liệu (%d): %s." % (len(unknown), ", ".join(unknown)))
+            tool_lookups.append("Thuốc chưa có trong dữ liệu 18 hoạt chất xếp lịch (%d): %s." % (len(unknown), ", ".join(unknown)))
+        if combo_meds:
+            tool_lookups.append(
+                "Thuốc phối hợp nhiều hoạt chất (%d): %s — cần kiểm tra đủ các hoạt chất trên vỏ hộp với dược sĩ."
+                % (len(combo_meds), ", ".join(c["input"] for c in combo_meds))
+            )
 
         guardrail_decision = _guardrail_decision_text(risk, guard, unknown, schedule_locked)
 
